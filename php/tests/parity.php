@@ -21,8 +21,8 @@ declare(strict_types=1);
  * consumer would; the expected column is spelled by the Python driver, whose
  * decoder keeps key order and tells {} from [].
  *
- * Unlike the conformance tests, NO row is skipped for any leg here: the 11
- * phase-6 rows the 0.35.0 fixtures still skip for php run in all three.
+ * NO row is skipped for any leg here, whatever the fixtures say (since 0.36.0
+ * they skip none).
  *
  * Usage (from inside the envelope, after `npm run build`):
  *   php php/tests/parity.php             the table

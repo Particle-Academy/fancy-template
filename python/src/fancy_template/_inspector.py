@@ -182,6 +182,9 @@ class Inspector:
                     self._issue("DIRECTIVE_TOO_DEEP", path)
                     return
                 frames = self._directives(value, path, frames)
+                if "$value" in value:
+                    self._splice(value, path, segments, frames, directive_depth)
+                    return
 
         for key, child in value.items():
             if key.startswith("$"):
@@ -190,6 +193,23 @@ class Inspector:
             if "{{" in key:
                 self._issue("TOKEN_IN_KEY", at)
             self._walk(child, at, [*segments, key], frames, directive_depth, False)
+
+    def _splice(
+        self, obj: dict[str, Any], path: str, segments: list[str], frames: list[DeclFrame], directive_depth: int
+    ) -> None:
+        """The rest of a splice (SPEC.md section 8), after its ``$`` keys.
+
+        Every other key is DIRECTIVE_SPLICE_KEY and is not walked. ``$value`` is
+        walked AT THE ELEMENT'S PATH (``$value`` is a pointer step, never a
+        profile segment) and as a non-element, so a ``$``-key on its top is
+        DIRECTIVE_MISPLACED. Without ``$each`` it is not walked: that is already
+        DIRECTIVE_INVALID.
+        """
+        for key in obj:
+            if not key.startswith("$"):
+                self._issue("DIRECTIVE_SPLICE_KEY", pointer(path, key))
+        if "$each" in obj:
+            self._walk(obj["$value"], pointer(path, "$value"), segments, frames, directive_depth, False)
 
     def _each_binding(self, obj: dict[str, Any], frames: list[DeclFrame]) -> list[DeclFrame] | None:
         """The frames an element's ``$each`` introduces, or None.
@@ -247,6 +267,13 @@ class Inspector:
                     value in self.variables or any(f["name"] == value for f in frames)
                 )
                 if not has_each or not isinstance(value, str) or not is_name(value) or shadows:
+                    self._issue("DIRECTIVE_INVALID", at)
+                continue
+
+            if key == "$value":
+                # Any JSON is a valid $value; only a splice with nothing to
+                # repeat over is wrong (SPEC.md section 8).
+                if not has_each:
                     self._issue("DIRECTIVE_INVALID", at)
                 continue
 

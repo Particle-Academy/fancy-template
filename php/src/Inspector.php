@@ -161,6 +161,11 @@ final class Inspector
                     return;
                 }
                 $frames = $this->directives($value, $path, $frames);
+                if (array_key_exists('$value', $value)) {
+                    $this->splice($value, $path, $segments, $frames, $directiveDepth);
+
+                    return;
+                }
             }
         }
 
@@ -173,6 +178,30 @@ final class Inspector
                 $this->issue('TOKEN_IN_KEY', $at);
             }
             $this->walk($child, $at, [...$segments, (string) $key], $frames, $directiveDepth, false);
+        }
+    }
+
+    /**
+     * The rest of a splice (SPEC.md section 8), after its `$` keys: every other
+     * key is DIRECTIVE_SPLICE_KEY and is not walked, then `$value` is walked AT
+     * THE ELEMENT'S PATH (`$value` is a pointer step, never a profile segment)
+     * and as a non-element, so a `$`-key on its top is DIRECTIVE_MISPLACED.
+     * Without `$each` it is not walked: that is already DIRECTIVE_INVALID, and
+     * its tokens would only cascade into TOKEN_UNDECLARED.
+     *
+     * @param  array<string, mixed>  $object
+     * @param  list<string>  $segments
+     * @param  list<array{name: string, decl: mixed}>  $frames  with the splice's binding
+     */
+    private function splice(array $object, string $path, array $segments, array $frames, int $directiveDepth): void
+    {
+        foreach ($object as $key => $_) {
+            if (! is_string($key) || ! str_starts_with($key, '$')) {
+                $this->issue('DIRECTIVE_SPLICE_KEY', Json::pointer($path, $key));
+            }
+        }
+        if (array_key_exists('$each', $object)) {
+            $this->walk($object['$value'], Json::pointer($path, '$value'), $segments, $frames, $directiveDepth, false);
         }
     }
 
@@ -263,6 +292,16 @@ final class Inspector
                 $shadows = is_string($value) && (array_key_exists($value, $this->variables)
                     || in_array($value, array_column($frames, 'name'), true));
                 if (! $hasEach || ! is_string($value) || ! Scanner::isName($value) || $shadows) {
+                    $this->issue('DIRECTIVE_INVALID', $at);
+                }
+
+                continue;
+            }
+
+            if ($key === '$value') {
+                // Any JSON is a valid $value; only a splice with nothing to
+                // repeat over is wrong (SPEC.md section 8).
+                if (! $hasEach) {
                     $this->issue('DIRECTIVE_INVALID', $at);
                 }
 

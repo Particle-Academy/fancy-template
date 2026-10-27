@@ -126,7 +126,15 @@ final class Renderer
 
                 continue;
             }
+            $isSplice = array_key_exists('$value', $item);
             foreach ($this->expand($item, $at, $frames) as $innerFrames) {
+                if ($isSplice) {
+                    // The splice object is not output: each copy is $value,
+                    // rendered at the element's path (SPEC.md section 8).
+                    $out[] = $this->value($item['$value'], Json::pointer($at, '$value'), $itemSegments, $innerFrames);
+
+                    continue;
+                }
                 $this->count(null);
                 $out[] = $this->object($item, $at, $itemSegments, $innerFrames);
             }

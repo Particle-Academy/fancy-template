@@ -198,6 +198,10 @@ export class Inspector {
           return;
         }
         frames = this.directives(value, path, frames);
+        if (Object.hasOwn(value, "$value")) {
+          this.splice(value, path, segments, frames, directiveDepth);
+          return;
+        }
       }
     }
 
@@ -206,6 +210,22 @@ export class Inspector {
       const at = pointer(path, key);
       if (key.includes("{{")) this.issue("TOKEN_IN_KEY", at);
       this.walk(value[key]!, at, [...segments, key], frames, directiveDepth, false);
+    }
+  }
+
+  /**
+   * The rest of a splice (SPEC.md section 8), after its `$` keys: every other
+   * key is DIRECTIVE_SPLICE_KEY and is not walked, then `$value` is walked AT
+   * THE ELEMENT'S PATH (`$value` is a pointer step, never a profile segment)
+   * and as a non-element, so a `$`-key on its top is DIRECTIVE_MISPLACED.
+   * Without `$each` it is not walked: that is already DIRECTIVE_INVALID.
+   */
+  private splice(object: JsonObject, path: string, segments: string[], frames: DeclFrame[], directiveDepth: number): void {
+    for (const key of Object.keys(object)) {
+      if (!key.startsWith("$")) this.issue("DIRECTIVE_SPLICE_KEY", pointer(path, key));
+    }
+    if (Object.hasOwn(object, "$each")) {
+      this.walk(own(object, "$value") as Json, pointer(path, "$value"), segments, frames, directiveDepth, false);
     }
   }
 
@@ -267,6 +287,13 @@ export class Inspector {
         if (!hasEach || typeof value !== "string" || !isName(value) || shadows) {
           this.issue("DIRECTIVE_INVALID", at);
         }
+        continue;
+      }
+
+      if (key === "$value") {
+        // Any JSON is a valid $value; only a splice with nothing to repeat
+        // over is wrong (SPEC.md section 8).
+        if (!hasEach) this.issue("DIRECTIVE_INVALID", at);
         continue;
       }
 

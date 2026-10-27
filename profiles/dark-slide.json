@@ -5,7 +5,7 @@
   "fields": [
     { "path": "title", "encode": "text" },
     { "path": "slides.*.elements.*.content", "encode": "markup" },
-    { "path": "slides.*.notes", "encode": "markdown" },
+    { "path": "slides.*.notes", "encode": "text" },
     { "path": "slides.*.elements.*.alt", "encode": "text" },
     { "path": "slides.*.elements.*.items.*", "encode": "text" },
     { "path": "slides.*.elements.*.columns.*.label", "encode": "text" },

@@ -9,10 +9,9 @@ require_once __DIR__.'/runner.php';
 /*
  * The template/* tables, run against the PHP leg.
  *
- * Written before this implementation, against SPEC.md. Every row runs; the
- * dark-slide and holy-sheet rows carry a stated PHP skip in the fixture
- * itself (phase 6), and the summary prints them, so "100% of what it
- * implements" is a number with a visible denominator rather than a claim.
+ * Written before this implementation, against SPEC.md. Every row runs and
+ * none is skipped (asserted below); the summary prints each suite's count, so
+ * "100%" is a number with a visible denominator rather than a claim.
  */
 
 const TEMPLATE_SUITES = [
@@ -53,32 +52,15 @@ it('passes every template/* row it does not skip, with the skips printed', funct
 })->with(TEMPLATE_SUITES);
 
 /*
- * Phase 6 built the dark-slide and holy-sheet profiles in this leg. The 0.35.0
- * fixtures still carry `skip.php` on those 11 rows (written before the leg
- * existed), and the pin does not move in this change, so the loader would keep
- * skipping them. They are run HERE instead, every one, and must pass: a skip
- * that outlives its reason is coverage the log claims and nobody has.
- *
- * When fancy-conformance drops the skips, runTable above runs them and this
- * test's floor (11) becomes the thing that fails, which is the prompt to
- * delete it.
+ * No template/* row is skipped for PHP since fancy-conformance 0.36.0 dropped
+ * the 11 phase-6 skips. Asserted, so a skip that comes back is seen rather
+ * than printed and passed.
  */
-it('passes every row the pinned fixtures still skip for php (phase 6 built them)', function (): void {
-    $ran = [];
-    foreach (TEMPLATE_SUITES as $suite) {
-        foreach (Conformance::cases($suite) as $case) {
-            if (! isset($case['skip']['php'])) {
-                continue;
-            }
-            $actual = runTemplateCase($case);
-            expect(Conformance::equals($actual, $case['expected']))->toBeTrue("{$suite}/{$case['id']}: ".json_encode($actual));
-            $ran[] = "{$suite}/{$case['id']}";
-        }
-    }
-    echo "\nphp-skipped rows run and passed: ".count($ran)."\n";
+it('skips no template/* row for php', function (string $suite): void {
+    $skipped = array_column(array_filter(Conformance::cases($suite), static fn (array $c): bool => isset($c['skip']['php'])), 'id');
 
-    expect($ran)->toHaveCount(11);
-});
+    expect($skipped)->toBe([]);
+})->with(TEMPLATE_SUITES);
 
 it('can fail: a runner returning nothing fails every row it runs', function (string $suite): void {
     // The control for the comparison itself. If the loader's equality were

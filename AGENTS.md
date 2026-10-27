@@ -91,9 +91,17 @@ and the CI checkout `ref: v0.35.0` (a Python test reads ci.yml). fancy-expr take
 `>=0.2.0 <2.0` everywhere; CI's Python job installs it from the `v0.2.0` tag
 because it is not on PyPI yet. `fine-print` is an exact PHP require-dev pin.
 
-**The 0.35.0 fixtures still mark the 11 dark-slide/holy-sheet rows `skip.php`.**
-The PHP conformance test runs them explicitly and asserts there are 11; when a
-fixture release drops the skips, that test fails and should be deleted.
+**From 0.36.0 no `template/*` row is skipped for any language**, and the PHP
+conformance test asserts it per suite. (0.35.0 marked 11 dark-slide/holy-sheet
+rows `skip.php`; the test that ran them explicitly was deleted with the skips.)
+
+**Running against an untagged fixture set.** Python reads the sibling
+`repos/fancy-conformance` checkout (pytest `pythonpath`), so it sees the working
+tree at once. PHP and TypeScript read `vendor/` and `node_modules/`; to run them
+against fixtures that are not published yet, copy that checkout's `suites/` and
+`VERSION` into `vendor/particle-academy/fancy-conformance/` and
+`node_modules/@particle-academy/fancy-conformance/`. `composer install` /
+`npm ci` put the pinned release back.
 
 `scripts/sabotage.py` and `parity.php --writers` read the envelope's sibling
 checkouts (`repos/fancy-expr`, the nine writer repos), so they run from inside
@@ -118,11 +126,6 @@ the envelope only. CI runs `parity.php` without `--writers`.
 
 ## Known gaps (phase 6 findings, open)
 
-- **A holy-sheet row cannot repeat.** A row is an ARRAY and directives sit only
-  on objects, so `$each` can repeat sheets but not rows (the xlsx corpus report
-  addresses its rows by index). Same for any list of strings. Needs a spec
-  change -- e.g. an element `{ "$each": ..., "$value": <any JSON> }` spliced as
-  its rendered `$value` -- with rows in fancy-conformance and all three legs.
 - **dark-slide `items` (kpiBand, metadataGrid) are objects**, but the profile's
   `slides.*.elements.*.items.*` matches only a string item, so a KPI value or
   caption cannot take a token. Slide and element `id` are not templatable
@@ -131,9 +134,6 @@ the envelope only. CI runs `parity.php` without `--writers`.
   languages): escaped values print their backslashes AND `\*` / `` \` `` still
   open italics / code. SPEC.md section 9 records the measurement and why the
   profile does not force `plain`. Fix belongs in dark-slide.
-- **dark-slide notes**: the profile and row 0104 escape notes as markdown, but
-  the PPTX writer writes notes as plain text and fancy-slides edits them in a
-  plain textarea, so the backslashes show in both.
 - **holy-sheet coerces `{ "value": "+1" }` to the number 1** (and `"-1"`):
   the wrapper stops formulas but not auto-typing. A template has no per-cell way
   to say "text" other than a `string` column type.

@@ -1,7 +1,7 @@
 {
   "fancyTemplate": 1,
   "writer": "holy-sheet",
-  "description": "A regional report: one SHEET repeated per region with $each, typed numbers and booleans kept as cells, every string wrapped {value: s} so data can never become a formula, and a sparse summary sheet. Rows themselves cannot repeat: a holy-sheet row is an array, and SPEC.md section 8 puts directives only on objects (see AGENTS.md, Known gaps), so the four quarters are addressed by index.",
+  "description": "A regional report: one SHEET repeated per region with $each, typed numbers and booleans kept as cells, every string wrapped {value: s} so data can never become a formula, and a sparse summary sheet. Rows repeat with a $value splice (SPEC.md section 8): one row per quarter, each spliced cell encoded exactly as a written one.",
   "variables": {
     "title": { "type": "string", "required": true, "maxLength": 120, "example": "Regional revenue" },
     "generatedAt": { "type": "date", "required": true, "example": "2026-10-27" },
@@ -61,10 +61,7 @@
           { "header": "On target" }
         ],
         "rows": [
-          ["{{ region.quarters.0.label }}", "{{ region.quarters.0.revenue }}", "{{ region.quarters.0.target }}", "{{ region.quarters.0.onTarget }}"],
-          ["{{ region.quarters.1.label }}", "{{ region.quarters.1.revenue }}", "{{ region.quarters.1.target }}", "{{ region.quarters.1.onTarget }}"],
-          ["{{ region.quarters.2.label }}", "{{ region.quarters.2.revenue }}", "{{ region.quarters.2.target }}", "{{ region.quarters.2.onTarget }}"],
-          ["{{ region.quarters.3.label }}", "{{ region.quarters.3.revenue }}", "{{ region.quarters.3.target }}", "{{ region.quarters.3.onTarget }}"],
+          { "$each": "region.quarters", "$as": "q", "$value": ["{{ q.label }}", "{{ q.revenue }}", "{{ q.target }}", "{{ q.onTarget }}"] },
           ["Comment", "{{ region.comment }}", "Sheet {{ $index }}", "{{ $last }}"]
         ]
       }

@@ -2,8 +2,8 @@
 
 The rows were published in fancy-conformance 0.35.0 BEFORE this leg existed, and
 it was written against them and SPEC.md -- not against the PHP or TypeScript
-source. The 11 dark-slide / holy-sheet rows carry a ``skip`` for PHP only; they
-run here, and must pass.
+source. No row is skipped for any language since 0.36.0 dropped the 11 phase-6
+PHP skips; every row runs here and must pass.
 """
 
 from __future__ import annotations

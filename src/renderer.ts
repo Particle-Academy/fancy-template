@@ -100,7 +100,14 @@ export class Renderer {
         out.push(this.value(item, at, itemSegments, frames, null));
         return;
       }
+      const isSplice = Object.hasOwn(item, "$value");
       for (const innerFrames of this.expand(item, at, frames)) {
+        if (isSplice) {
+          // The splice object is not output: each copy is $value, rendered at
+          // the element's path (SPEC.md section 8).
+          out.push(this.value(own(item, "$value") as Json, pointer(at, "$value"), itemSegments, innerFrames, null));
+          continue;
+        }
         this.count(null);
         out.push(this.object(item, at, itemSegments, innerFrames));
       }

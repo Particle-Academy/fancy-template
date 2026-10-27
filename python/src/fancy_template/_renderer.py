@@ -99,7 +99,13 @@ class Renderer:
             if not isinstance(item, dict) or not any(k.startswith("$") for k in item):
                 result.append(self._value(item, at, item_segments, frames, None))
                 continue
+            is_splice = "$value" in item
             for inner in self._expand(item, at, frames):
+                if is_splice:
+                    # The splice object is not output: each copy is $value,
+                    # rendered at the element's path (SPEC.md section 8).
+                    result.append(self._value(item["$value"], pointer(at, "$value"), item_segments, inner, None))
+                    continue
                 self._count(None)
                 result.append(self._object(item, at, item_segments, inner))
         return result
