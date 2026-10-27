@@ -54,14 +54,15 @@ always allowed; nothing that rendered before renders differently.
   every holy-sheet string result is written `{ "value": s }`, so user data can
   never become a formula. A whole-token number or boolean keeps its type, and so
   does a valid date whose path is DECLARED `date` (SPEC.md section 9, clarified).
-- All 180 `template/*` rows of fancy-conformance 0.35.0 pass in every leg,
-  including the 11 dark-slide/holy-sheet rows the fixtures still mark
-  `skip.php`: the PHP test runs those explicitly and asserts there are 11.
+- All 203 `template/*` rows of fancy-conformance 0.36.0 pass in every leg,
+  none skipped. **The fixture pin moved 0.35.0 -> 0.36.0** together in
+  composer.json (exact), package.json (`^0.36.0`) + package-lock.json, the
+  three `PINNED_SUITE_VERSION` constants and both CI checkout refs.
 - **Cross-leg parity** (`php php/tests/parity.php`): every fixture row and a
   corpus of realistic templates (`examples/`: certificate, invoice with `$each`
   line items, a deck with a repeated slide and repeated table rows, a regional
-  xlsx report) run through all three legs and compared byte for byte -- 180/180
-  against the expected column in each leg, 188/188 between the legs; `--control`
+  xlsx report) run through all three legs and compared byte for byte -- 203/203
+  against the expected column in each leg, 211/211 between the legs; `--control`
   reports 0% on every column. `--writers` renders the corpus through the real
   writers (fine-print; last-word, dark-slide and holy-sheet in PHP, Node and
   Python) and compares the extracted text: 60/60 files identical.

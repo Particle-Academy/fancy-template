@@ -25,7 +25,7 @@ const TEMPLATE_SUITES = [
  * move this constant and composer.json's exact require-dev pin together. The
  * two tests below fail until they agree with what is installed.
  */
-const PINNED_SUITE_VERSION = '0.35.0';
+const PINNED_SUITE_VERSION = '0.36.0';
 
 it('runs against the pinned fixture set, and says which', function (): void {
     echo "\nfancy-conformance installed: ".Conformance::version().', pinned: '.PINNED_SUITE_VERSION."\n";

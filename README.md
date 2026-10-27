@@ -37,8 +37,8 @@ value, and every input is bounded. Values are encoded for where they land:
 holy-sheet strings are written `{ "value": s }` so data can never become a
 formula; dark-slide values are escaped for the element's markdown or html.
 
-The three legs pass the same 180 `template/*` conformance rows
-(fancy-conformance 0.35.0) and produce byte-identical output on every row and on
+The three legs pass the same 203 `template/*` conformance rows
+(fancy-conformance 0.36.0) and produce byte-identical output on every row and on
 the realistic templates in `examples/` (`php php/tests/parity.php`).
 
 `examples/` holds the default certificate (fine-print), an invoice (last-word),

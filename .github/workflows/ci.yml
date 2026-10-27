@@ -170,7 +170,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: Particle-Academy/fancy-conformance
-          ref: v0.35.0
+          ref: v0.36.0
           path: .fancy-conformance
           persist-credentials: false
 
@@ -228,7 +228,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: Particle-Academy/fancy-conformance
-          ref: v0.35.0
+          ref: v0.36.0
           path: .fancy-conformance
           persist-credentials: false
 

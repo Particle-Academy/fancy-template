@@ -84,10 +84,10 @@ python -I scripts/sabotage.py [php|ts|py|expr]
 Never read a suite's verdict through a pipe; the harnesses write to files and
 check exit codes.
 
-**Pins.** fancy-conformance is 0.35.0 in all three legs and every one asserts
-it: composer.json's EXACT require-dev, package.json's `^0.35.0` plus the
+**Pins.** fancy-conformance is 0.36.0 in all three legs and every one asserts
+it: composer.json's EXACT require-dev, package.json's `^0.36.0` plus the
 committed package-lock.json, `PINNED_SUITE_VERSION` in each conformance test,
-and the CI checkout `ref: v0.35.0` (a Python test reads ci.yml). fancy-expr takes
+and the CI checkout `ref: v0.36.0` (a Python test reads ci.yml). fancy-expr takes
 `>=0.2.0 <2.0` everywhere; CI's Python job installs it from the `v0.2.0` tag
 because it is not on PyPI yet. `fine-print` is an exact PHP require-dev pin.
 

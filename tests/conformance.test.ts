@@ -25,7 +25,7 @@ import { runTemplateCase, type TemplateCase } from "./runner";
  * php/tests/ConformanceTest.php and in python/tests/test_conformance.py, and the
  * CI checkout ref -- the tests on every side fail until all agree.
  */
-const PINNED_SUITE_VERSION = "0.35.0";
+const PINNED_SUITE_VERSION = "0.36.0";
 
 const SUITES = [
   "template/tokenize",

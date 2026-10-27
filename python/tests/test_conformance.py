@@ -24,7 +24,7 @@ from template_runner import run_template_case
 # version (package.json's range + the committed lockfile; composer.json's exact
 # require-dev). Move all of them together, and only after re-running the tables in
 # every runtime; the tests below fail otherwise.
-PINNED_SUITE_VERSION = "0.35.0"
+PINNED_SUITE_VERSION = "0.36.0"
 
 SUITES = (
     "template/tokenize",
