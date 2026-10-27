@@ -1,0 +1,92 @@
+name: Publish
+
+# Fires on a version tag. Packagist syncs from the tag on its own, so unlike
+# the npm publish workflow this CANNOT PREVENT a release -- by the time this
+# runs, the version is already resolvable by consumers.
+#
+# It is still worth having, and the reason is asymmetric with npm:
+#
+#   - On npm the tarball is immutable, so a missing changelog entry can never
+#     be repaired. The gate there must block, and does.
+#   - On Packagist the changelog is served FROM THE REPO, so an entry added
+#     after the tag is read by everyone who looks. Detection is therefore a
+#     complete fix here, where it would not be on npm.
+#
+# A red build within a minute of the tag is the difference between finding a
+# missing entry ourselves and finding out from a consumer.
+#
+# Only the PHP leg exists today. When the TypeScript and Python legs land,
+# this workflow gains their npm / PyPI jobs in the fancy-expr shape, and the
+# changelog gate must then BLOCK those publishes.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # creates the GitHub release below
+
+jobs:
+  changelog:
+    name: Changelog entry for this tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Assert the tagged version is documented
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          if [ ! -f CHANGELOG.md ]; then
+            echo "::error::No CHANGELOG.md. Every package keeps one."
+            exit 1
+          fi
+
+          # Accept both house styles: `## 1.2.3 -- date` and Keep a Changelog's
+          # `## [1.2.3] - date`.
+          if ! grep -qE "^## +\[?v?${VERSION}\]?" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no entry for ${VERSION}."
+            echo "::error::Add one -- say what a consumer must DO, not just what changed."
+            echo "::error::Packagist has already published this tag; the entry is still read from the repo, so fix it on main now."
+            exit 1
+          fi
+
+          # STRUCTURE, not just presence. At release time the tagged version IS
+          # the newest, so it must be the first version heading in the file.
+          # [Unreleased] may precede it. A complete-but-mis-ordered changelog
+          # passes a presence check and hides the release from anyone reading
+          # top-down.
+          FIRST=$(grep -E '^## ' CHANGELOG.md | grep -viE '^## +\[?unreleased\]?' | head -1)
+
+          if ! printf '%s' "$FIRST" | grep -qE "^## +\[?v?${VERSION}\]?"; then
+            echo "::error::CHANGELOG.md has an entry for ${VERSION}, but it is NOT the first version heading."
+            echo "::error::Top of file is: ${FIRST}"
+            echo "::error::A consumer reads top-down, so a complete-but-mis-ordered changelog hides this release. Move it above the older entries."
+            exit 1
+          fi
+
+          echo "Found a changelog entry for ${VERSION}, and it is the newest."
+
+      # Packagist syncing from the tag means a release can be fully published
+      # and completely invisible on GitHub. The notes come from CHANGELOG.md,
+      # so there is no second description to drift from the first.
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; leaving it alone."
+            exit 0
+          fi
+
+          # The section for this version, up to the next `## ` heading.
+          awk -v v="$VERSION" '
+            /^## / { if (found) exit; if (index($0, v)) { found = 1 }; next }
+            found { print }
+          ' CHANGELOG.md > notes.md
+
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md
+          echo "Published release $GITHUB_REF_NAME."
