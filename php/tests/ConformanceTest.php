@@ -20,9 +20,25 @@ const TEMPLATE_SUITES = [
     'template/limits', 'template/profiles', 'template/inspect',
 ];
 
-it('runs against the fixture set it was written against, and says which', function (): void {
-    echo "\nfancy-conformance installed: ".Conformance::version()."\n";
+/*
+ * The fixture set this leg was written and verified against. Moving it is one
+ * deliberate commit: re-run every table against the new version first, then
+ * move this constant and composer.json's exact require-dev pin together. The
+ * two tests below fail until they agree with what is installed.
+ */
+const PINNED_SUITE_VERSION = '0.35.0';
+
+it('runs against the pinned fixture set, and says which', function (): void {
+    echo "\nfancy-conformance installed: ".Conformance::version().', pinned: '.PINNED_SUITE_VERSION."\n";
+
+    expect(Conformance::version())->toBe(PINNED_SUITE_VERSION);
     expect(Conformance::listSuites())->toContain(...TEMPLATE_SUITES);
+});
+
+it('pins the fixture set exactly in composer.json', function (): void {
+    $composer = json_decode((string) file_get_contents(dirname(__DIR__, 2).'/composer.json'), true, flags: JSON_THROW_ON_ERROR);
+
+    expect($composer['require-dev']['particle-academy/fancy-conformance'] ?? null)->toBe(PINNED_SUITE_VERSION);
 });
 
 it('passes every template/* row it does not skip, with the skips printed', function (string $suite): void {

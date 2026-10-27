@@ -8,7 +8,14 @@ version number is not a compatibility promise until 1.0.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-27
+
 ### Added
+
+- The conformance test asserts the installed fixture set equals the pinned
+  0.35.0 and that composer.json pins it exactly, so a moved fixture set fails
+  instead of being printed and passed. `.gitattributes` keeps every file LF, so
+  the in-source golden text matches on a Windows checkout too.
 
 - `SPEC.md`, the normative specification of document templates: envelope,
   variable declarations, `{{ }}` tokens, resolution, the fixed filter list,
