@@ -1,0 +1,16 @@
+{
+  "writer": "dark-slide",
+  "schema": "dark-slide deck",
+  "notes": "Phase 6: written as data now, not implemented by the PHP leg (markup encoding). src and background.image are image fields so that a LITERAL local path is refused: dark-slide's ImageResolver reads local paths.",
+  "fields": [
+    { "path": "title", "encode": "text" },
+    { "path": "slides.*.elements.*.content", "encode": "markup" },
+    { "path": "slides.*.notes", "encode": "markdown" },
+    { "path": "slides.*.elements.*.alt", "encode": "text" },
+    { "path": "slides.*.elements.*.items.*", "encode": "text" },
+    { "path": "slides.*.elements.*.columns.*.label", "encode": "text" },
+    { "path": "slides.*.elements.*.rows.**", "encode": "text" },
+    { "path": "slides.*.elements.*.src", "encode": "image", "mime": ["image/png", "image/jpeg"] },
+    { "path": "slides.*.background.image", "encode": "image", "mime": ["image/png", "image/jpeg"] }
+  ]
+}

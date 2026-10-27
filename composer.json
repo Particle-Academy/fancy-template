@@ -1,0 +1,70 @@
+{
+    "name": "particle-academy/fancy-template",
+    "description": "Document templates for the Fancy document writers: a writer document with {{ tokens }} and JSON directives, plus a declaration of the data it needs. inspect() at save time, validateData() before render, render() to plain writer JSON. No code execution, no includes, bounded everywhere. One spec, three runtimes, held to a shared conformance table.",
+    "type": "library",
+    "keywords": [
+        "template",
+        "document",
+        "pdf",
+        "docx",
+        "certificate",
+        "agentic",
+        "cross-language",
+        "particle-academy"
+    ],
+    "license": "MIT",
+    "homepage": "https://github.com/Particle-Academy/fancy-template",
+    "authors": [
+        {
+            "name": "Particle Academy",
+            "homepage": "https://github.com/Particle-Academy"
+        }
+    ],
+    "require": {
+        "php": "^8.4",
+        "particle-academy/fancy-expr": ">=0.2.0 <2.0"
+    },
+    "require-dev": {
+        "particle-academy/fancy-conformance": "0.35.0",
+        "particle-academy/fine-print": "0.3.0",
+        "pestphp/pest": "^3.0|^4.0"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../../repos/fancy-expr",
+            "options": { "symlink": true, "versions": { "particle-academy/fancy-expr": "0.2.0" } }
+        },
+        {
+            "type": "path",
+            "url": "../../repos/fancy-conformance",
+            "options": { "symlink": true, "versions": { "particle-academy/fancy-conformance": "0.35.0" } }
+        },
+        {
+            "type": "path",
+            "url": "../../repos/fine-print",
+            "options": { "symlink": true, "versions": { "particle-academy/fine-print": "0.3.0" } }
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "FancyTemplate\\": "php/src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "FancyTemplate\\Tests\\": "php/tests/"
+        }
+    },
+    "scripts": {
+        "test": "pest --test-directory=php/tests"
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

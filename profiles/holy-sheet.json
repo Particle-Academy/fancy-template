@@ -1,0 +1,11 @@
+{
+  "writer": "holy-sheet",
+  "schema": "holy-sheet workbook",
+  "notes": "Phase 6: written as data now, not implemented by the PHP leg (cell encoding). formula is deliberately absent.",
+  "fields": [
+    { "path": "sheets.*.name", "encode": "text" },
+    { "path": "sheets.*.rows.*.*", "encode": "cell" },
+    { "path": "sheets.*.cells.*", "encode": "cell" },
+    { "path": "sheets.*.cells.*.value", "encode": "text" }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "fancyTemplate": 1,
+  "writer": "fine-print",
+  "description": "The default certificate of completion: sandbox/courses-cert/prototype.php, tokenised. Letter landscape, cream ground, double gold frame.",
+  "variables": {
+    "title": { "type": "string", "default": "Certificate of Completion", "maxLength": 80, "description": "The certificate's heading." },
+    "recipientName": { "type": "string", "required": true, "maxLength": 200, "description": "Who completed the program.", "example": "Ada Lovelace" },
+    "programName": { "type": "string", "required": true, "maxLength": 200, "description": "The course or program.", "example": "Introduction to Analytical Engines" },
+    "programDetail": { "type": "string", "default": "course", "maxLength": 80, "description": "What kind of program it was." },
+    "issuedAt": { "type": "date", "required": true, "description": "Date of issue, ISO-8601.", "example": "2026-10-27" },
+    "issuer": { "type": "string", "default": "Particle Academy", "maxLength": 120 },
+    "verificationCode": { "type": "string", "required": true, "maxLength": 64, "example": "A1B2C3D4E5F60718" },
+    "certificateNumber": { "type": "string", "maxLength": 64, "description": "Printed under the details when present." }
+  },
+  "document": {
+    "title": "{{ title }}",
+    "defaultFont": "Times",
+    "page": {
+      "size": "letter",
+      "orientation": "landscape",
+      "background": "#FDFAF3",
+      "border": { "style": "double", "width": 6, "color": "#B08D57", "inset": 24 },
+      "margins": { "top": 72, "right": 60, "bottom": 60, "left": 60 }
+    },
+    "blocks": [
+      { "type": "paragraph", "align": "center", "spaceAfter": 21, "runs": [{ "text": "{{ title | upper }}", "size": 10.5, "letterSpacing": 4.2, "color": "#8A6D3B" }] },
+      { "type": "paragraph", "align": "center", "spaceAfter": 18, "runs": [{ "text": "{{ title }}", "size": 36, "bold": true, "letterSpacing": 2.9, "color": "#1A1A1A" }] },
+      { "type": "paragraph", "align": "center", "spaceAfter": 12, "runs": [{ "text": "This is to certify that", "size": 12, "color": "#555555" }] },
+      { "type": "paragraph", "align": "center", "spaceAfter": 18, "indentLeft": 150, "indentRight": 150,
+        "borders": { "bottom": { "style": "single", "width": 0.75, "color": "#C8B48A" } },
+        "runs": [{ "text": "{{ recipientName }}", "size": 30, "italic": true, "color": "#1A1A1A" }] },
+      { "type": "paragraph", "align": "center", "spaceAfter": 48, "lineHeight": 1.6, "runs": [
+        { "text": "has successfully completed ", "size": 13.5 },
+        { "text": "{{ programName }}", "size": 13.5, "bold": true },
+        { "text": ", {{ programDetail }}.", "size": 13.5 }
+      ] },
+      { "type": "table", "widths": [1, 1, 1],
+        "borders": { "top": { "style": "none" }, "right": { "style": "none" }, "bottom": { "style": "none" }, "left": { "style": "none" }, "insideH": { "style": "none" }, "insideV": { "style": "none" } },
+        "rows": [{ "cells": [
+          { "blocks": [
+            { "type": "paragraph", "align": "center", "spaceAfter": 4, "runs": [{ "text": "Issued", "bold": true, "size": 12, "color": "#1A1A1A" }] },
+            { "type": "paragraph", "align": "center", "spaceAfter": 0, "runs": [{ "text": "{{ issuedAt | date:\"MMMM d, yyyy\" }}", "size": 10.5, "color": "#555555" }] }
+          ] },
+          { "blocks": [
+            { "type": "paragraph", "align": "center", "spaceAfter": 4, "runs": [{ "text": "Issued by", "bold": true, "size": 12, "color": "#1A1A1A" }] },
+            { "type": "paragraph", "align": "center", "spaceAfter": 0, "runs": [{ "text": "{{ issuer }}", "size": 10.5, "color": "#555555" }] }
+          ] },
+          { "blocks": [
+            { "type": "paragraph", "align": "center", "spaceAfter": 4, "runs": [{ "text": "Verification", "bold": true, "size": 12, "color": "#1A1A1A" }] },
+            { "type": "paragraph", "align": "center", "spaceAfter": 0, "runs": [{ "text": "{{ verificationCode }}", "size": 10.5, "color": "#555555", "font": "Courier", "letterSpacing": 1 }] }
+          ] }
+        ] }] },
+      { "$if": "certificateNumber", "type": "paragraph", "align": "center", "spaceBefore": 24, "runs": [{ "text": "Certificate No. {{ certificateNumber }}", "size": 9, "color": "#8A6D3B" }] }
+    ]
+  }
+}

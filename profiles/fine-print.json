@@ -1,0 +1,18 @@
+{
+  "writer": "fine-print",
+  "schema": "fine-print 0.3",
+  "notes": "An ALLOWLIST: a string field not matched here refuses tokens. link, color, font, fonts, page geometry and every style field are deliberately absent. Band slots refuse a value containing {page}/{pages}: fine-print replaces them with str_replace and has no escape.",
+  "fields": [
+    { "path": "title", "encode": "text" },
+    { "path": "**.runs.*.text", "encode": "text" },
+    { "path": "**.blocks.*.text", "encode": "text" },
+    { "path": "**.blocks.*.alt", "encode": "text" },
+    { "path": "**.blocks.*.src", "encode": "image", "mime": ["image/png", "image/jpeg"] },
+    { "path": "page.header.left", "encode": "band" },
+    { "path": "page.header.center", "encode": "band" },
+    { "path": "page.header.right", "encode": "band" },
+    { "path": "page.footer.left", "encode": "band" },
+    { "path": "page.footer.center", "encode": "band" },
+    { "path": "page.footer.right", "encode": "band" }
+  ]
+}
