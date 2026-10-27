@@ -1,0 +1,67 @@
+{
+  "name": "@particle-academy/fancy-template",
+  "version": "0.1.0",
+  "description": "Document templates for the Fancy document writers: a writer document with {{ tokens }} and JSON directives, plus a declaration of the data it needs. inspect() at save time, validateData() before render, render() to plain writer JSON. No code execution, no includes, bounded everywhere. One spec, three runtimes, held to a shared conformance table.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./profiles/*": "./profiles/*"
+  },
+  "files": [
+    "dist",
+    "profiles",
+    "SPEC.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "template",
+    "document",
+    "pdf",
+    "docx",
+    "pptx",
+    "xlsx",
+    "certificate",
+    "agentic",
+    "cross-language",
+    "particle-academy"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Particle-Academy/fancy-template.git"
+  },
+  "homepage": "https://github.com/Particle-Academy/fancy-template",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm,cjs --dts --clean",
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@particle-academy/fancy-expr": ">=0.2.0 <2.0"
+  },
+  "devDependencies": {
+    "@particle-academy/fancy-conformance": "^0.35.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.12"
+  },
+  "overrides": {
+    "esbuild": "^0.28.1",
+    "source-map-js": "^1.2.2"
+  }
+}

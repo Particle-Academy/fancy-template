@@ -74,7 +74,7 @@ final class Inspector
         foreach ($template as $key => $value) {
             $at = Json::pointer('', $key);
             match ($key) {
-                'fancyTemplate' => $value === 1 ? null : $this->issue('TEMPLATE_VERSION', $at),
+                'fancyTemplate' => ($value === 1 || $value === 1.0) ? null : $this->issue('TEMPLATE_VERSION', $at),
                 'writer' => ($this->profile = Profile::for($value)) !== null ? null : $this->issue('TEMPLATE_WRITER', $at),
                 'description' => is_string($value) ? null : $this->issue('TEMPLATE_SHAPE', $at),
                 'variables' => Json::isObject($value) ? null : $this->issue('TEMPLATE_SHAPE', $at),
@@ -177,6 +177,40 @@ final class Inspector
     }
 
     /**
+     * The frames an element's `$each` introduces, or null when it introduces
+     * none (absent, or invalid -- which the ordered pass reports). Worked out
+     * BEFORE that pass so `$if` sees the binding whichever key was written
+     * first: SPEC.md section 8 says `$each` runs first, and JSON key order is
+     * not something an author should have to get right. (Until phase 6 a `$if`
+     * written before its `$each` was refused as DIRECTIVE_UNDECLARED.)
+     *
+     * @param  array<string, mixed>  $object
+     * @param  list<array{name: string, decl: mixed}>  $frames
+     * @return list<array{name: string, decl: mixed}>|null
+     */
+    private function eachBinding(array $object, array $frames): ?array
+    {
+        $each = $object['$each'] ?? null;
+        if (! is_string($each) || strlen($each) > $this->limits->tokenLength) {
+            return null;
+        }
+        $steps = Scanner::pathOnly($each);
+        if ($steps === null) {
+            return null;
+        }
+        [$found, $decl] = $this->resolveDecl($steps, $frames);
+        if (! $found || (is_array($decl) && ($decl['type'] ?? null) !== 'array')) {
+            return null;
+        }
+        $as = $object['$as'] ?? 'item';
+        if (! is_string($as) || ! Scanner::isName($as)) {
+            return null;
+        }
+
+        return [...$frames, ['name' => $as, 'decl' => is_array($decl) ? ($decl['items'] ?? null) : null]];
+    }
+
+    /**
      * Check an element's directives in written order; return the frames its
      * contents see (with the new loop binding, when `$each` is valid).
      *
@@ -186,9 +220,8 @@ final class Inspector
      */
     private function directives(array $object, string $path, array $frames): array
     {
-        $inner = $frames;
+        $inner = $this->eachBinding($object, $frames) ?? $frames;
         $hasEach = array_key_exists('$each', $object);
-        $as = $object['$as'] ?? 'item';
 
         foreach ($object as $key => $value) {
             if (! is_string($key) || ! str_starts_with($key, '$')) {
@@ -221,11 +254,6 @@ final class Inspector
                 }
                 if (is_array($decl) && ($decl['type'] ?? null) !== 'array') {
                     $this->issue('DIRECTIVE_NOT_ARRAY', $at, implode('.', $steps));
-
-                    continue;
-                }
-                if (is_string($as) && Scanner::isName($as)) {
-                    $inner = [...$frames, ['name' => $as, 'decl' => is_array($decl) ? ($decl['items'] ?? null) : null]];
                 }
 
                 continue;
@@ -298,6 +326,20 @@ final class Inspector
      */
     private function resolveDecl(array $steps, array $frames): array
     {
+        return self::declAt($steps, $frames, $this->variables);
+    }
+
+    /**
+     * resolveDecl over an explicit variable map, for the renderer: a cell keeps
+     * a date bare only when its path is DECLARED `date` (SPEC.md section 9).
+     *
+     * @param  list<string>  $steps
+     * @param  list<array{name: string, decl: mixed}>  $frames
+     * @param  array<string, mixed>  $variables
+     * @return array{0: bool, 1: mixed}
+     */
+    public static function declAt(array $steps, array $frames, array $variables): array
+    {
         $head = $steps[0];
         if (in_array($head, Scanner::LOOP_HEADS, true)) {
             if ($frames === [] || count($steps) > 1) {
@@ -316,10 +358,10 @@ final class Inspector
             }
         }
         if (! $found) {
-            if (! array_key_exists($head, $this->variables)) {
+            if (! array_key_exists($head, $variables)) {
                 return [false, null];
             }
-            $decl = $this->variables[$head];
+            $decl = $variables[$head];
         }
 
         foreach (array_slice($steps, 1) as $step) {

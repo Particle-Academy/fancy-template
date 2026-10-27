@@ -13,57 +13,127 @@ implementation; a disagreement between the spec and a row is fixed in both, in
 one change. The design and the owner's decisions:
 envelope `.ai/plans/document-writer-templates.md`.
 
+Three legs, one spec. Each leg was written against SPEC.md, not against another
+leg's source -- that is how phase 6 found four PHP disagreements (CHANGELOG).
+Keep it that way: when a leg needs a change, read the spec clause first.
+
 ## Layout
 
 ```
 SPEC.md                    the specification
-profiles/<writer>.json     which fields take tokens and how values are encoded -- DATA, shared by every leg
-examples/                  real templates (the default certificate)
-php/src/                   PHP leg: Template (API), Inspector, Renderer, Scanner, Declarations, Filters, Numbers, Dates, Profile
-php/tests/                 Pest: conformance, golden (through fine-print), security
-scripts/sabotage.py        breaks each bound and guard in turn; every one must turn a suite red
-composer.json              AT THE ROOT
+profiles/<writer>.json     which fields take tokens and how values are encoded -- DATA, read by every leg
+examples/                  realistic templates + corpus.json (the parity corpus, with hostile data sets)
+php/src/  php/tests/       PHP leg (composer.json AT THE ROOT): Pest -- conformance, spec, security, golden
+src/  tests/               TypeScript leg (package.json AT THE ROOT): vitest -- conformance, spec, security
+python/                    Python leg, its own pyproject (`fancy-template`): pytest -- conformance, spec, security
+scripts/parity/            the per-leg drivers and the writer read-back for php/tests/parity.php
+scripts/sabotage.py        breaks each bound and guard in turn, in every leg; every one must turn a suite red
 ```
+
+The same module split in each leg: Scanner (tokens), Inspector (static issues),
+Declarations (types, validateData, defaults), Renderer (directives, encodings,
+output bounds), Filters / Numbers / Dates, Profile, Json (plain-JSON reduction,
+pointers, image check), Limits, TemplateError.
 
 ## Invariants
 
 - **Writers never depend on this package.** It emits their plain JSON; they
   stay zero-dependency.
-- **No regex over template text.** `Scanner` and `Dates::compile` are
-  forward-only. The token search is bounded by `tokenLength`.
+- **No regex over template text.** The scanners and the date-pattern compilers
+  are forward-only. The token search is bounded by `tokenLength`, measured in
+  UTF-8 BYTES in every leg (the TS and Python scanners work on encoded bytes).
 - **Profiles are allowlists.** A field not listed refuses tokens.
-- **Errors carry codes and template pointers, never data values.**
-  `SecurityTest` and sabotage S22 hold this.
-- **Absent is `Absent::Value`, an enum case**, because any string sentinel can
-  be forged by data.
-- **Data is reduced to plain JSON first** (`Json::plain`), so no host method
-  runs during render.
+- **Errors carry codes and template pointers, never data values.** The security
+  tests and sabotage S22/T22/P22 hold this.
+- **Absent is a value nothing in data can be**: `Absent::Value` (PHP enum case),
+  a unique `Symbol` (TS), a private singleton (Python).
+- **Data is reduced to plain JSON first**, with the same refusals in every leg
+  (non-finite, lone surrogate, cycle, deeper than 4096): SPEC.md section 4.
 - **A value is never re-scanned.** Substituted text containing `{{` reaches the
-  page literally (golden test).
+  page literally.
+- **holy-sheet cells**: every string result is `{ "value": s }`; only numbers,
+  booleans and declared-`date` values stay bare.
+- **Iterations are counted lazily** (a generator in every leg), so the same
+  template fails with the same code whichever bound it hits first.
 
 ## Testing
 
 ```bash
+# PHP
 composer install
 php vendor/bin/pest --test-directory=php/tests
-php php/tests/parity.php            # byte-for-byte parity vs every fixture (reported, not a gate)
-php php/tests/parity.php --control  # must report 0%
-python -I scripts/sabotage.py       # every bound and guard, one at a time
+
+# TypeScript
+npm install
+npm run lint && npm test && npm run build
+
+# Python (from python/; the loader and fancy-expr come from the envelope's
+# sibling checkouts through pytest's `pythonpath`)
+cd python && python -m pytest -q
+python -m ruff check python && python -m ruff format --check python
+cd python && MYPYPATH="src;../../fancy-expr/python/src" python -m mypy --config-file pyproject.toml   # ':' on POSIX
+
+# Cross-leg (needs `npm run build` first; the TS leg is measured as it ships)
+php php/tests/parity.php              # three legs x every row + corpus, byte for byte; exit 1 on any mismatch
+php php/tests/parity.php --control    # every leg replaced by a different wrong answer: must report 0%
+php php/tests/parity.php --writers    # + the corpus through the real writers, text read back and compared
+
+python -I scripts/sabotage.py [php|ts|py|expr]
 ```
 
-Every dependency resolves from Packagist; there are no path repositories.
-`fancy-expr` takes the sibling range `>=0.2.0 <2.0`. `fancy-conformance` and
-`fine-print` are EXACT `require-dev` pins, because `composer.lock` is not
-committed and a range would resolve whatever Packagist serves on the day CI
-runs. Moving the fixture set is a deliberate commit here. The conformance test
-prints the installed fixture version.
+Never read a suite's verdict through a pipe; the harnesses write to files and
+check exit codes.
 
-`scripts/sabotage.py` also breaks bounds in the envelope's `repos/fancy-expr`
-checkout, so it runs from inside the envelope only.
+**Pins.** fancy-conformance is 0.35.0 in all three legs and every one asserts
+it: composer.json's EXACT require-dev, package.json's `^0.35.0` plus the
+committed package-lock.json, `PINNED_SUITE_VERSION` in each conformance test,
+and the CI checkout `ref: v0.35.0` (a Python test reads ci.yml). fancy-expr takes
+`>=0.2.0 <2.0` everywhere; CI's Python job installs it from the `v0.2.0` tag
+because it is not on PyPI yet. `fine-print` is an exact PHP require-dev pin.
+
+**The 0.35.0 fixtures still mark the 11 dark-slide/holy-sheet rows `skip.php`.**
+The PHP conformance test runs them explicitly and asserts there are 11; when a
+fixture release drops the skips, that test fails and should be deleted.
+
+`scripts/sabotage.py` and `parity.php --writers` read the envelope's sibling
+checkouts (`repos/fancy-expr`, the nine writer repos), so they run from inside
+the envelope only. CI runs `parity.php` without `--writers`.
 
 ## Traps
 
 - `[]` is both an empty object and an empty list in PHP. `Json::isObject`
-  treats it as an object; a template using `{}` meaningfully round-trips as `[]`.
-- PHP's float-to-string depends on ini settings. `Numbers` never uses it.
-- Pest needs `--test-directory=php/tests` (no root `tests/` here).
+  treats it as an object; a template using `{}` meaningfully round-trips as `[]`
+  in the PHP leg only.
+- PHP decodes an object key spelled with digits as an INTEGER key, and a
+  `{"0":..,"1":..}` object as a list. JavaScript reorders integer-like keys to
+  the front of an object. Avoid digit keys in templates.
+- PHP's float-to-string depends on ini settings. `Numbers` never uses it; TS
+  uses `Number#toString` itself; Python starts from `repr()`.
+- An integer past 2^53 is exact in PHP and Python and rounded in JavaScript
+  (JSON.parse). `money` takes only safe integers in TS for that reason.
+- Pest needs `--test-directory=php/tests` (no root `tests/` here -- that is the
+  TypeScript leg's).
+- The Python wheel force-includes `../profiles`; build with `--sdist --wheel`,
+  never the wheel from the sdist.
+
+## Known gaps (phase 6 findings, open)
+
+- **A holy-sheet row cannot repeat.** A row is an ARRAY and directives sit only
+  on objects, so `$each` can repeat sheets but not rows (the xlsx corpus report
+  addresses its rows by index). Same for any list of strings. Needs a spec
+  change -- e.g. an element `{ "$each": ..., "$value": <any JSON> }` spliced as
+  its rendered `$value` -- with rows in fancy-conformance and all three legs.
+- **dark-slide `items` (kpiBand, metadataGrid) are objects**, but the profile's
+  `slides.*.elements.*.items.*` matches only a string item, so a KPI value or
+  caption cannot take a token. Slide and element `id` are not templatable
+  either, so a repeated slide repeats its literal id.
+- **dark-slide's PPTX `MarkdownInline` has no backslash escapes** (all three
+  languages): escaped values print their backslashes AND `\*` / `` \` `` still
+  open italics / code. SPEC.md section 9 records the measurement and why the
+  profile does not force `plain`. Fix belongs in dark-slide.
+- **dark-slide notes**: the profile and row 0104 escape notes as markdown, but
+  the PPTX writer writes notes as plain text and fancy-slides edits them in a
+  plain textarea, so the backslashes show in both.
+- **holy-sheet coerces `{ "value": "+1" }` to the number 1** (and `"-1"`):
+  the wrapper stops formulas but not auto-typing. A template has no per-cell way
+  to say "text" other than a `string` column type.

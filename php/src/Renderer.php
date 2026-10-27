@@ -23,24 +23,50 @@ final class Renderer
 
     private int $bytes = 0;
 
-    /** @param  array<string, mixed>  $data */
+    /**
+     * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $variables  the declarations, for a cell's declared-date rule
+     */
     private function __construct(
         private readonly Profile $profile,
         private readonly array $data,
+        private readonly array $variables,
         private readonly Limits $limits,
     ) {}
 
     /**
      * @param  array<string, mixed>  $document
      * @param  array<string, mixed>  $data
+     * @param  array<string, mixed>  $variables
      * @return array<string, mixed>
      */
-    public static function run(array $document, array $data, Profile $profile, Limits $limits): array
+    public static function run(array $document, array $data, array $variables, Profile $profile, Limits $limits): array
     {
-        $self = new self($profile, $data, $limits);
+        $self = new self($profile, $data, $variables, $limits);
         $self->count(null);
 
         return $self->object($document, '/document', [], []);
+    }
+
+    /** CommonMark: a backslash before every ASCII punctuation character (SPEC.md section 9). */
+    public static function escapeMarkdown(string $s): string
+    {
+        $out = '';
+        $n = strlen($s);
+        for ($i = 0; $i < $n; $i++) {
+            $c = $s[$i];
+            $o = ord($c);
+            $punct = ($o >= 33 && $o <= 47) || ($o >= 58 && $o <= 64) || ($o >= 91 && $o <= 96) || ($o >= 123 && $o <= 126);
+            $out .= $punct ? '\\'.$c : $c;
+        }
+
+        return $out;
+    }
+
+    /** `& < > " '` as entities (SPEC.md section 9). */
+    public static function escapeHtml(string $s): string
+    {
+        return strtr($s, ['&' => '&amp;', '<' => '&lt;', '>' => '&gt;', '"' => '&quot;', "'" => '&#39;']);
     }
 
     /**
@@ -56,7 +82,7 @@ final class Renderer
             if (is_string($key) && str_starts_with($key, '$')) {
                 continue;
             }
-            $out[$key] = $this->value($value, Json::pointer($path, $key), [...$segments, (string) $key], $frames);
+            $out[$key] = $this->value($value, Json::pointer($path, $key), [...$segments, (string) $key], $frames, $object);
         }
 
         return $out;
@@ -65,12 +91,19 @@ final class Renderer
     /**
      * @param  list<string>  $segments
      * @param  list<array<string, mixed>>  $frames
+     * @param  array<string, mixed>|null  $parent  the object holding this value, for a markup field's `format`
      */
-    private function value(mixed $value, string $path, array $segments, array $frames): mixed
+    private function value(mixed $value, string $path, array $segments, array $frames, ?array $parent = null): mixed
     {
         if (is_string($value)) {
-            $out = $this->string($value, $path, $segments, $frames);
-            $this->count($out);
+            $out = $this->string($value, $path, $segments, $frames, $parent);
+            if (is_array($out)) {
+                // A cell wrapper: one object and one string (SPEC.md section 10).
+                $this->count(null);
+                $this->count($out['value']);
+            } else {
+                $this->count($out);
+            }
 
             return $out;
         }
@@ -143,12 +176,14 @@ final class Renderer
         }
 
         $as = $item['$as'] ?? 'item';
+        [, $decl] = Inspector::declAt($steps, $frames, $this->variables);
+        $itemsDecl = is_array($decl) ? ($decl['items'] ?? null) : null;
         $last = count($list) - 1;
         foreach ($list as $index => $element) {
             if (++$this->iterations > $this->limits->iterations) {
                 throw new TemplateError('RENDER_TOO_MANY_ITERATIONS', $at);
             }
-            $inner = [...$frames, ['name' => $as, 'value' => $element, '$index' => $index, '$first' => $index === 0, '$last' => $index === $last]];
+            $inner = [...$frames, ['name' => $as, 'decl' => $itemsDecl, 'value' => $element, '$index' => $index, '$first' => $index === 0, '$last' => $index === $last]];
             if (array_key_exists('$if', $item) && ! $this->condition($item['$if'], $inner)) {
                 continue;
             }
@@ -221,10 +256,14 @@ final class Renderer
     }
 
     /**
+     * A string's rendered value: a string, or for a `cell` field a typed scalar
+     * or the `{value: s}` wrapper.
+     *
      * @param  list<string>  $segments
      * @param  list<array<string, mixed>>  $frames
+     * @param  array<string, mixed>|null  $parent
      */
-    private function string(string $text, string $path, array $segments, array $frames): string
+    private function string(string $text, string $path, array $segments, array $frames, ?array $parent): mixed
     {
         if (! str_contains($text, '{{')) {
             return $text;
@@ -232,6 +271,7 @@ final class Renderer
 
         $field = $this->profile->field($segments);
         $parts = Scanner::tokenize($text, $this->limits->tokenLength);
+        $format = $field['encode'] === 'markdown' ? 'markdown' : ($field['encode'] === 'markup' ? ($parent['format'] ?? null) : null);
         $out = '';
 
         foreach ($parts as $part) {
@@ -258,6 +298,12 @@ final class Renderer
 
                     return $value;
                 }
+                if ($field['encode'] === 'cell' && count($parts) === 1) {
+                    $kept = $this->typedCell($value, $part['path'] ?? null, $frames);
+                    if ($kept !== Absent::Value) {
+                        return $kept;
+                    }
+                }
                 $piece = Filters::scalarText($value);
             } catch (TemplateError $e) {
                 throw new TemplateError($e->errorCode, $path, $variable);
@@ -266,10 +312,39 @@ final class Renderer
             if ($field['encode'] === 'band' && (str_contains($piece, '{page}') || str_contains($piece, '{pages}'))) {
                 throw new TemplateError('VALUE_PAGE_FIELD', $path, $variable);
             }
-            $out .= $piece;
+            $out .= match ($format) {
+                'markdown' => self::escapeMarkdown($piece),
+                'html' => self::escapeHtml($piece),
+                default => $piece,
+            };
         }
 
-        return $out;
+        // Every other cell result is wrapped, so user data can never become a
+        // formula: holy-sheet promotes a BARE string starting with "=" and takes
+        // {value: s} as literal text (template/profiles 0201).
+        return $field['encode'] === 'cell' ? ['value' => $out] : $out;
+    }
+
+    /**
+     * A whole token in a cell keeps a number or a boolean, and a string that is
+     * a valid `date` (SPEC.md section 3) when its path is DECLARED `date`.
+     * Absent::Value when the result is to be wrapped. A valid date cannot begin
+     * with "=", so nothing kept bare here can become a formula.
+     *
+     * @param  list<string>|null  $steps
+     * @param  list<array<string, mixed>>  $frames
+     */
+    private function typedCell(mixed $value, ?array $steps, array $frames): mixed
+    {
+        if (is_int($value) || is_float($value) || is_bool($value)) {
+            return $value;
+        }
+        if (! is_string($value) || $steps === null || Dates::parse($value) === null) {
+            return Absent::Value;
+        }
+        [$found, $decl] = Inspector::declAt($steps, $frames, $this->variables);
+
+        return $found && is_array($decl) && ($decl['type'] ?? null) === 'date' ? $value : Absent::Value;
     }
 
     /** One output value; a string also adds its bytes (SPEC.md section 10). */

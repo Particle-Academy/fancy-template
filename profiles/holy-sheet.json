@@ -1,7 +1,7 @@
 {
   "writer": "holy-sheet",
   "schema": "holy-sheet workbook",
-  "notes": "Phase 6: written as data now, not implemented by the PHP leg (cell encoding). formula is deliberately absent.",
+  "notes": "Implemented in all three legs (phase 6). Every string result in a cell is written {value: s}, so user data can never become a formula. formula is deliberately absent.",
   "fields": [
     { "path": "sheets.*.name", "encode": "text" },
     { "path": "sheets.*.rows.*.*", "encode": "cell" },

@@ -52,6 +52,34 @@ it('passes every template/* row it does not skip, with the skips printed', funct
     expect($summary['passed'])->toBeGreaterThan(0);
 })->with(TEMPLATE_SUITES);
 
+/*
+ * Phase 6 built the dark-slide and holy-sheet profiles in this leg. The 0.35.0
+ * fixtures still carry `skip.php` on those 11 rows (written before the leg
+ * existed), and the pin does not move in this change, so the loader would keep
+ * skipping them. They are run HERE instead, every one, and must pass: a skip
+ * that outlives its reason is coverage the log claims and nobody has.
+ *
+ * When fancy-conformance drops the skips, runTable above runs them and this
+ * test's floor (11) becomes the thing that fails, which is the prompt to
+ * delete it.
+ */
+it('passes every row the pinned fixtures still skip for php (phase 6 built them)', function (): void {
+    $ran = [];
+    foreach (TEMPLATE_SUITES as $suite) {
+        foreach (Conformance::cases($suite) as $case) {
+            if (! isset($case['skip']['php'])) {
+                continue;
+            }
+            $actual = runTemplateCase($case);
+            expect(Conformance::equals($actual, $case['expected']))->toBeTrue("{$suite}/{$case['id']}: ".json_encode($actual));
+            $ran[] = "{$suite}/{$case['id']}";
+        }
+    }
+    echo "\nphp-skipped rows run and passed: ".count($ran)."\n";
+
+    expect($ran)->toHaveCount(11);
+});
+
 it('can fail: a runner returning nothing fails every row it runs', function (string $suite): void {
     // The control for the comparison itself. If the loader's equality were
     // vacuous, the green above would mean nothing.

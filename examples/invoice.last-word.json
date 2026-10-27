@@ -1,0 +1,94 @@
+{
+  "fancyTemplate": 1,
+  "writer": "last-word",
+  "description": "An invoice: line items repeated with $each over table rows, amounts in integer minor units through money, dates through date, an optional note through $if, and the customer in a footer band.",
+  "variables": {
+    "invoiceNumber": { "type": "string", "required": true, "maxLength": 32, "example": "INV-2026-0042" },
+    "issuedAt": { "type": "date", "required": true, "example": "2026-10-27" },
+    "dueAt": { "type": "date", "required": true, "example": "2026-11-26" },
+    "seller": { "type": "string", "default": "Particle Academy", "maxLength": 120 },
+    "customer": {
+      "type": "object",
+      "required": true,
+      "properties": {
+        "name": { "type": "string", "required": true, "maxLength": 120 },
+        "email": { "type": "string", "maxLength": 200, "default": "" }
+      },
+      "example": { "name": "Example Corp", "email": "billing@example.com" }
+    },
+    "lines": {
+      "type": "array",
+      "required": true,
+      "maxItems": 200,
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": { "type": "string", "required": true, "maxLength": 200 },
+          "quantity": { "type": "integer", "required": true },
+          "unitPrice": { "type": "integer", "required": true, "description": "Minor units (cents)." },
+          "amount": { "type": "integer", "required": true, "description": "Minor units (cents)." }
+        }
+      },
+      "example": [{ "description": "Workshop seat", "quantity": 2, "unitPrice": 45000, "amount": 90000 }]
+    },
+    "subtotal": { "type": "integer", "required": true, "example": 90000 },
+    "tax": { "type": "integer", "required": true, "example": 7200 },
+    "total": { "type": "integer", "required": true, "example": 97200 },
+    "note": { "type": "string", "maxLength": 500 }
+  },
+  "document": {
+    "title": "Invoice {{ invoiceNumber }}",
+    "page": {
+      "size": "a4",
+      "footer": { "left": "{{ seller }} -- invoice {{ invoiceNumber }}", "right": "Page {page} of {pages}" }
+    },
+    "blocks": [
+      { "type": "heading", "level": 1, "runs": [{ "text": "Invoice {{ invoiceNumber }}" }] },
+      { "type": "paragraph", "runs": [
+        { "text": "Issued ", "bold": true },
+        { "text": "{{ issuedAt | date:\"d MMMM yyyy\" }}" },
+        { "text": "   Due ", "bold": true },
+        { "text": "{{ dueAt | date:\"EEEE, d MMMM yyyy\" }}" }
+      ] },
+      { "type": "paragraph", "runs": [
+        { "text": "Bill to: ", "bold": true },
+        { "text": "{{ customer.name }}" },
+        { "$if": "customer.email", "text": " ({{ customer.email }})" }
+      ] },
+      { "type": "table", "widths": [5, 1, 2, 2], "rows": [
+        { "header": true, "cells": [
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "Description", "bold": true }] }] },
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "Qty", "bold": true }] }] },
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "Unit price", "bold": true }] }] },
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "Amount", "bold": true }] }] }
+        ] },
+        { "$each": "lines", "$as": "line", "cells": [
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "{{ line.description }}" }] }] },
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "{{ line.quantity }}" }] }] },
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "{{ line.unitPrice | money:USD }}" }] }] },
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "{{ line.amount | money:USD }}" }] }] }
+        ] },
+        { "cells": [
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "Subtotal" }] }] },
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "" }] }] },
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "" }] }] },
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "{{ subtotal | money:USD }}" }] }] }
+        ] },
+        { "cells": [
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "Tax" }] }] },
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "" }] }] },
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "" }] }] },
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "{{ tax | money:USD }}" }] }] }
+        ] },
+        { "cells": [
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "Total", "bold": true }] }] },
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "" }] }] },
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "" }] }] },
+          { "blocks": [{ "type": "paragraph", "runs": [{ "text": "{{ total | money:USD }}", "bold": true }] }] }
+        ] }
+      ] },
+      { "$if": "note", "type": "paragraph", "runs": [{ "text": "Note: ", "italic": true }, { "text": "{{ note }}" }] },
+      { "$if": "lines.length > 3", "type": "paragraph", "runs": [{ "text": "Itemised over several lines; questions to {{ seller }}.", "italic": true }] }
+    ]
+  }
+}

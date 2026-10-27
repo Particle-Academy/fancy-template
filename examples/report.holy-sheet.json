@@ -1,0 +1,73 @@
+{
+  "fancyTemplate": 1,
+  "writer": "holy-sheet",
+  "description": "A regional report: one SHEET repeated per region with $each, typed numbers and booleans kept as cells, every string wrapped {value: s} so data can never become a formula, and a sparse summary sheet. Rows themselves cannot repeat: a holy-sheet row is an array, and SPEC.md section 8 puts directives only on objects (see AGENTS.md, Known gaps), so the four quarters are addressed by index.",
+  "variables": {
+    "title": { "type": "string", "required": true, "maxLength": 120, "example": "Regional revenue" },
+    "generatedAt": { "type": "date", "required": true, "example": "2026-10-27" },
+    "regions": {
+      "type": "array",
+      "required": true,
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "required": true, "maxLength": 31 },
+          "comment": { "type": "string", "default": "", "maxLength": 500 },
+          "quarters": {
+            "type": "array",
+            "required": true,
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": { "type": "string", "required": true, "maxLength": 20 },
+                "revenue": { "type": "number", "required": true },
+                "target": { "type": "number", "required": true },
+                "onTarget": { "type": "boolean", "required": true }
+              }
+            }
+          }
+        }
+      },
+      "example": [{ "name": "EMEA", "comment": "", "quarters": [
+        { "label": "Q1", "revenue": 1.2, "target": 1.0, "onTarget": true },
+        { "label": "Q2", "revenue": 1.4, "target": 1.5, "onTarget": false },
+        { "label": "Q3", "revenue": 2.1, "target": 1.8, "onTarget": true },
+        { "label": "Q4", "revenue": 1.9, "target": 2.0, "onTarget": false }
+      ] }]
+    }
+  },
+  "document": {
+    "sheets": [
+      {
+        "name": "Summary",
+        "cells": {
+          "A1": { "value": "{{ title }}" },
+          "A2": { "value": "Generated" },
+          "B2": "{{ generatedAt }}",
+          "A3": { "value": "Generated (text)" },
+          "B3": "{{ generatedAt | date:\"d MMMM yyyy\" }}"
+        }
+      },
+      {
+        "$each": "regions",
+        "$as": "region",
+        "name": "{{ region.name }}",
+        "columns": [
+          { "header": "Quarter" },
+          { "header": "Revenue ($M)", "type": "number" },
+          { "header": "Target ($M)", "type": "number" },
+          { "header": "On target" }
+        ],
+        "rows": [
+          ["{{ region.quarters.0.label }}", "{{ region.quarters.0.revenue }}", "{{ region.quarters.0.target }}", "{{ region.quarters.0.onTarget }}"],
+          ["{{ region.quarters.1.label }}", "{{ region.quarters.1.revenue }}", "{{ region.quarters.1.target }}", "{{ region.quarters.1.onTarget }}"],
+          ["{{ region.quarters.2.label }}", "{{ region.quarters.2.revenue }}", "{{ region.quarters.2.target }}", "{{ region.quarters.2.onTarget }}"],
+          ["{{ region.quarters.3.label }}", "{{ region.quarters.3.revenue }}", "{{ region.quarters.3.target }}", "{{ region.quarters.3.onTarget }}"],
+          ["Comment", "{{ region.comment }}", "Sheet {{ $index }}", "{{ $last }}"]
+        ]
+      }
+    ]
+  }
+}

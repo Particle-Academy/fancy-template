@@ -1,0 +1,68 @@
+{
+  "fancyTemplate": 1,
+  "writer": "dark-slide",
+  "description": "A quarterly review: a title slide, one slide REPEATED per region with $each, a table whose rows repeat with $each, markdown content whose values are escaped, and speaker notes.",
+  "variables": {
+    "quarter": { "type": "string", "required": true, "maxLength": 20, "example": "Q3 2026" },
+    "presentedAt": { "type": "date", "required": true, "example": "2026-10-27" },
+    "presenter": { "type": "string", "required": true, "maxLength": 120, "example": "Ada Lovelace" },
+    "regions": {
+      "type": "array",
+      "required": true,
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "required": true, "maxLength": 60 },
+          "revenue": { "type": "integer", "required": true, "description": "Minor units (cents)." },
+          "growth": { "type": "number", "required": true },
+          "headline": { "type": "string", "required": true, "maxLength": 200 },
+          "onTarget": { "type": "boolean", "required": true }
+        }
+      },
+      "example": [{ "name": "EMEA", "revenue": 210000000, "growth": 12.5, "headline": "Best quarter on record", "onTarget": true }]
+    }
+  },
+  "document": {
+    "id": "quarterly-review",
+    "title": "{{ quarter }} review",
+    "theme": { "name": "default", "colors": { "background": "#FFFFFF", "text": "#111827", "muted": "#6B7280", "accent": "#F97316", "surface": "#F3F4F6" } },
+    "slides": [
+      {
+        "id": "title",
+        "elements": [
+          { "id": "title-heading", "type": "text", "x": 0.06, "y": 0.3, "w": 0.88, "h": 0.2, "format": "markdown",
+            "content": "# {{ quarter }} review", "style": { "fontSize": 120, "weight": 700 } },
+          { "id": "title-byline", "type": "text", "x": 0.06, "y": 0.55, "w": 0.88, "h": 0.1,
+            "content": "{{ presenter }} -- {{ presentedAt | date:\"d MMMM yyyy\" }}", "style": { "fontSize": 48 } }
+        ],
+        "notes": "Open with the headline for {{ quarter }}."
+      },
+      {
+        "$each": "regions",
+        "$as": "region",
+        "id": "region",
+        "elements": [
+          { "id": "region-title", "type": "text", "x": 0.06, "y": 0.06, "w": 0.88, "h": 0.15, "format": "markdown",
+            "content": "**{{ region.name }}:** {{ region.headline }}", "style": { "fontSize": 80 } },
+          { "id": "region-figures", "type": "text", "x": 0.06, "y": 0.3, "w": 0.88, "h": 0.1,
+            "content": "Revenue {{ region.revenue | money:USD }}, growth {{ region.growth | number:1 }}%", "style": { "fontSize": 48 } },
+          { "$if": "!region.onTarget", "id": "region-warning", "type": "text", "x": 0.06, "y": 0.45, "w": 0.88, "h": 0.1, "format": "html",
+            "content": "<b>Below target:</b> {{ region.name }}", "style": { "fontSize": 48 } }
+        ],
+        "notes": "Region {{ region.name }} ({{ $index }} of the list); headline: {{ region.headline }}"
+      },
+      {
+        "id": "all-regions",
+        "elements": [
+          { "id": "all-title", "type": "text", "x": 0.06, "y": 0.06, "w": 0.88, "h": 0.12, "content": "All regions", "style": { "fontSize": 80 } },
+          { "id": "all-table", "type": "table", "x": 0.06, "y": 0.22, "w": 0.88, "h": 0.6,
+            "columns": [{ "key": "region", "label": "Region" }, { "key": "revenue", "label": "Revenue" }, { "key": "growth", "label": "Growth" }],
+            "rows": [
+              { "$each": "regions", "$as": "r", "region": "{{ r.name }}", "revenue": "{{ r.revenue | money:USD }}", "growth": "{{ r.growth | number:1 }}%" }
+            ] }
+        ]
+      }
+    ]
+  }
+}

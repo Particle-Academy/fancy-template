@@ -47,8 +47,8 @@ final class Declarations
                 'description' => ! is_string($value),
                 'enum' => ! in_array($type, ['string', 'number', 'integer'], true) || ! Json::isList($value) || $value === []
                     || array_filter($value, static fn ($v): bool => self::typeOk($type, $v)) !== $value,
-                'maxLength' => ! in_array($type, ['string', 'date', 'image'], true) || ! is_int($value) || $value < 0,
-                'maxItems' => $type !== 'array' || ! is_int($value) || $value < 0,
+                'maxLength' => ! in_array($type, ['string', 'date', 'image'], true) || ! self::isCount($value),
+                'maxItems' => $type !== 'array' || ! self::isCount($value),
                 'items' => $type !== 'array',
                 'properties' => $type !== 'object' || ! Json::isObject($value),
                 'default', 'example' => self::validate($value, $decl, '') !== [],
@@ -198,6 +198,16 @@ final class Declarations
         }
 
         return $object;
+    }
+
+    /**
+     * A non-negative integer as SPEC.md section 3 defines integer: an integral
+     * VALUE, so `3.0` counts. Until phase 6 this leg required a PHP int, which
+     * JavaScript cannot even express the difference from.
+     */
+    private static function isCount(mixed $v): bool
+    {
+        return (is_int($v) || (is_float($v) && is_finite($v) && floor($v) === $v)) && $v >= 0;
     }
 
     public static function typeOk(string $type, mixed $v): bool

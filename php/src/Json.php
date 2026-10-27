@@ -69,7 +69,13 @@ final class Json
         return null;
     }
 
-    /** UTF-8 bytes of every string, keys included. */
+    /**
+     * UTF-8 bytes of every string, object keys included. An object key spelled
+     * with digits ("10") is decoded by PHP as the INTEGER key 10, so it is
+     * counted from its decimal spelling, which is the key's JSON text. Until
+     * phase 6 it was skipped, and this leg allowed what the spec and the other
+     * two legs refuse.
+     */
     public static function stringBytes(mixed $value): int
     {
         if (is_string($value)) {
@@ -79,8 +85,9 @@ final class Json
             return 0;
         }
         $total = 0;
+        $isList = array_is_list($value);
         foreach ($value as $k => $v) {
-            $total += (is_string($k) ? strlen($k) : 0) + self::stringBytes($v);
+            $total += ($isList ? 0 : strlen((string) $k)) + self::stringBytes($v);
         }
 
         return $total;

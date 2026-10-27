@@ -15,7 +15,7 @@ namespace FancyTemplate;
 final class Profile
 {
     /** The encodings this implementation has built. A profile needing any other is not offered. */
-    public const IMPLEMENTED_ENCODINGS = ['text', 'band', 'image'];
+    public const IMPLEMENTED_ENCODINGS = ['text', 'band', 'markup', 'markdown', 'cell', 'image'];
 
     /** @var array<string, self|null> */
     private static array $cache = [];

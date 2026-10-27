@@ -33,7 +33,7 @@ wire.
 
 | key | rule | issue code |
 |---|---|---|
-| `fancyTemplate` | exactly the integer `1` | `TEMPLATE_VERSION` |
+| `fancyTemplate` | exactly the integer `1` (an integral value, as section 3 defines integer: `1.0` is the same number; `true` and `"1"` are not) | `TEMPLATE_VERSION` |
 | `writer` | a profile this implementation knows (section 9) | `TEMPLATE_WRITER` |
 | `variables` | optional object; absent means `{}` | `TEMPLATE_SHAPE` |
 | `document` | required object | `TEMPLATE_SHAPE` |
@@ -108,6 +108,14 @@ fails at render unless it has a fallback (section 6).
 Before validating, data is reduced to plain JSON values. A host object that is
 not plain JSON data is converted the way the host language's JSON encoder would
 convert it, or refused (`DATA_TYPE`). No host method is called during render.
+
+Never plain JSON, in every language, so the three legs refuse the same input
+(`DATA_TYPE` at `""` for data, `TEMPLATE_SHAPE` at `""` for a template): a
+non-finite number, a string that is not well-formed Unicode (a lone surrogate),
+a cycle, and nesting deeper than 4096 levels (PHP's JSON encoder limit). These
+are refused WHOLE, before validation, rather than reported at a path, because
+JavaScript's encoder would otherwise rewrite `Infinity` to `null` and move the
+error.
 
 **Defaults** apply at every level: an absent name with a `default` takes the
 default (recursively for object properties) before anything reads it.
@@ -249,8 +257,14 @@ Directive keys are removed from the output. `$each` repeats the object once per
 element, spliced into the parent array in order, with bindings `<$as>`, `$index`
 (0-based), `$first`, `$last`. When both are present, `$each` runs first and `$if`
 is evaluated once per element. `$if` sees every declared variable (after
-defaults) and the loop bindings; an absent path is `null` (fancy-expr's rule),
-so a condition on an optional variable is not an error.
+defaults) and the loop bindings -- including the element's own `$each` binding,
+**whatever order the two keys are written in** (JSON key order is not something
+an author should have to get right); an absent path is `null` (fancy-expr's
+rule), so a condition on an optional variable is not an error.
+
+**A directive can only repeat an OBJECT.** An array element that is itself an
+array (a holy-sheet row) or a string (a list of strings) cannot carry `$each`, so
+it cannot be repeated. See "Known gaps" in `AGENTS.md`.
 
 Static issues (`inspect`):
 
@@ -281,7 +295,7 @@ index, `**` for zero or more. **Anything not listed refuses tokens**
 | `band` | as `text`, but a VALUE containing `{page}` or `{pages}` is `VALUE_PAGE_FIELD` |
 | `markup` | as `text`, each value escaped for the element's `format`: `markdown` backslash-escapes every ASCII punctuation character (CommonMark), `html` escapes `& < > " '` as entities, `plain` or absent leaves it |
 | `markdown` | as `markup` with format fixed to markdown |
-| `cell` | a whole token keeps a number, boolean or date as-is; every other result is written `{ "value": s }`, so user data can never become a formula |
+| `cell` | a whole token keeps a number, boolean or date as-is; every other result is written `{ "value": s }`, so user data can never become a formula. "Date" means: the token's path is DECLARED `date` and the result (after filters) is a valid `date` string (section 3) -- a date-shaped value of a `string` variable is wrapped, and `{{ d \| date:"yyyy" }}` is text. A valid date cannot begin with `=`. A literal (token-free) cell is the author's and is left as written |
 | `image` | must be a whole token, no filters, naming an `image` variable; the value's type must be in the profile's `mime` list (`VALUE_IMAGE_TYPE`). A literal (token-free) value must be a valid image data URL of an allowed type (`TEMPLATE_IMAGE_INVALID`) |
 
 Wrong use of an image field is `TOKEN_IMAGE_FIELD`.
@@ -291,14 +305,25 @@ last-word has an escape for it: both replace the literal text in a band. A refus
 is loud; any lookalike substitution would print a different character. When a
 writer gains an escape, the band encoding uses it.
 
-**The markdown escape is CommonMark's.** dark-slide's PPTX writer
-(`MarkdownInline`) does not honour backslash escapes yet and writes `html` as
-plain text, so an escaped value prints its backslashes there. Recorded as a
-dark-slide finding; the escape is still the correct encoding for every
-CommonMark consumer, including fancy-slides.
+**The markdown escape is CommonMark's, and the profile does not force `plain`.**
+dark-slide's PPTX writer (`MarkdownInline`, in all three of its languages) does
+not honour backslash escapes and writes `html` as plain text. Measured in phase 6
+by writing the hostile corpus deck through it: an escaped value prints its
+backslashes, AND the escape fails to neutralise markup -- `\*bold\*` still opens
+italics and `` \`c\` `` still opens a code span, because the tokenizer reads the
+`*` and the backtick as markers regardless of the backslash before them.
 
-Profiles in phase 1: `fine-print` and `last-word` (implemented in PHP);
-`dark-slide` and `holy-sheet` (rows written, implementation in phase 6).
+Forcing `format: plain` on a substituted element is not the answer: `format` is
+per ELEMENT, not per run, so it would print the template author's own `**`, `#`
+and `-` literally on every slide that uses a token, and it contradicts
+template/profiles 0101 and 0102. The escape is the correct encoding for every
+CommonMark consumer, including fancy-slides; the fix belongs in dark-slide
+(`MarkdownInline`: a backslash before ASCII punctuation yields that character,
+consumed before marker detection). Until then a dark-slide template that must
+show user text verbatim in a `.pptx` uses an element without `format`.
+
+Profiles: `fine-print`, `last-word`, `dark-slide` and `holy-sheet`, implemented
+in all three legs (phase 6).
 
 ## 10. Bounds
 
@@ -328,7 +353,8 @@ nested `$each` counts every inner element of every outer one.
 
 ## 11. API
 
-Identical in every language (names adapted to the language's case convention):
+Identical in every language (names adapted to the language's case convention:
+PHP `Template::validateData`, TypeScript `validateData`, Python `validate_data`):
 
 - `inspect(template, options?) -> { ok, issues: [{ code, path, variable? }] }` -- no
   data. Issues in document order: envelope keys, then variables (in written

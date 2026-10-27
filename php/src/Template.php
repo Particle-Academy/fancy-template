@@ -71,7 +71,7 @@ final class Template
             throw new TemplateError($errors[0]['code'], $errors[0]['path']);
         }
 
-        return Renderer::run($template['document'], $data, Profile::for($template['writer']), $limits);
+        return Renderer::run($template['document'], $data, Inspector::variables($template), Profile::for($template['writer']), $limits);
     }
 
     /**

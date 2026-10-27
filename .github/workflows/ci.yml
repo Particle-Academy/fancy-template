@@ -9,10 +9,10 @@ permissions:
   contents: read
 
 # The same polyglot shape as fancy-expr: one spec, three implementations, one
-# required job per language. Only the PHP leg exists today, so only the PHP job
-# is here. The TypeScript and Python jobs are added WITH their legs, never as
-# placeholders -- a job that installs nothing and tests nothing is a green tick
-# over zero assertions, which is worse than no job at all.
+# required job per language -- plus a fourth that runs all three legs on the
+# same rows and compares their output byte for byte. A language whose suite does
+# not run in CI is a language whose agreement with the other two is a claim
+# rather than a test result.
 jobs:
   # One gate, stated once, that every installing job waits on. A check that
   # finishes beside the thing it guards is a report, not a gate.
@@ -112,7 +112,155 @@ jobs:
       - name: Test
         run: vendor/bin/pest --test-directory=php/tests
 
-      # Byte-for-byte parity against every fixture. Reported, not a gate: the
-      # gate is the conformance suite above.
-      - name: Parity report
+  node:
+    needs: allowlist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      # The committed package-lock.json pins fancy-conformance to the fixture
+      # set tests/conformance.test.ts asserts.
+      - name: Install
+        run: npm install --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint
+
+      # NOT `npm test --if-present`. An absent script makes that step pass by
+      # doing nothing, and a green tick over zero assertions is worse than a red
+      # one.
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  python:
+    needs: allowlist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      # The shared fixtures and their Python loader, never on PyPI, at the TAG
+      # python/tests/test_conformance.py pins (PINNED_SUITE_VERSION). With no
+      # `ref`, every fixture release could turn this job red for a reason no
+      # commit here caused. A test fails if this ref and the pin disagree.
+      - name: Check out fancy-conformance
+        uses: actions/checkout@v7
+        with:
+          repository: Particle-Academy/fancy-conformance
+          ref: v0.35.0
+          path: .fancy-conformance
+          persist-credentials: false
+
+      # fancy-expr is this leg's one runtime dependency (first-party). It is not
+      # on PyPI yet, so the job installs it from its own tagged source -- the
+      # floor of the sibling range, so the suite proves the range's lower bound.
+      # A test fails if this checkout floats to a branch.
+      - name: Check out fancy-expr
+        uses: actions/checkout@v7
+        with:
+          repository: Particle-Academy/fancy-expr
+          ref: v0.2.0
+          path: .fancy-expr
+          persist-credentials: false
+
+      # `dependency-groups` (PEP 735), so `pip install --group`, which needs
+      # pip >= 25.1. fancy-expr first, so the editable install finds the
+      # requirement already satisfied instead of asking PyPI for it.
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ./.fancy-expr/python
+          python -m pip install -e ./python --group ./python/pyproject.toml:test
+
+      - name: Lint
+        run: |
+          python -m pip install --group ./python/pyproject.toml:lint
+          python -m ruff check python
+          python -m ruff format --check python
+
+      - name: Typecheck
+        run: |
+          python -m pip install --group ./python/pyproject.toml:typecheck
+          python -m mypy --config-file python/pyproject.toml
+
+      - name: Test
+        working-directory: python
+        env:
+          FANCY_CONFORMANCE_ROOT: ${{ github.workspace }}/.fancy-conformance
+          PYTHONPATH: ${{ github.workspace }}/.fancy-conformance/python/src
+        run: python -m pytest -q
+
+  # All three legs on the same rows: every template/* fixture (no skip honoured
+  # for any leg) and every realistic template in examples/corpus.json, compared
+  # BYTE FOR BYTE with each other and with the expected column. A GATE: any
+  # mismatch on a conformance row is a bug. The writer read-back
+  # (`--writers`) needs the nine writer checkouts of the envelope and runs there.
+  parity:
+    needs: allowlist
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out fancy-conformance
+        uses: actions/checkout@v7
+        with:
+          repository: Particle-Academy/fancy-conformance
+          ref: v0.35.0
+          path: .fancy-conformance
+          persist-credentials: false
+
+      - name: Check out fancy-expr
+        uses: actions/checkout@v7
+        with:
+          repository: Particle-Academy/fancy-expr
+          ref: v0.2.0
+          path: .fancy-expr
+          persist-credentials: false
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          coverage: none
+        env:
+          update: true
+      - name: Floor PHP at the PHP2Shell-patched release (CVE-2026-109618/109619)
+        run: php -r '$v=$argv[1]??PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION.".".PHP_RELEASE_VERSION; $f=["8.5"=>"8.5.12","8.4"=>"8.4.27","8.3"=>"8.3.36","8.2"=>"8.2.35"][implode(".",array_slice(explode(".",$v),0,2))]??(version_compare($v,"8.6",">=")?"8.6":"8.2.35"); if(version_compare($v,$f,"<")){echo "::error::PHP $v is below the PHP2Shell floor $f".PHP_EOL;exit(1);} echo "PHP $v >= PHP2Shell floor $f".PHP_EOL;'
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          composer install --no-interaction --prefer-dist
+          npm install --no-audit --no-fund
+          npm run build
+
+      - name: Parity (three legs, byte for byte)
+        env:
+          FANCY_CONFORMANCE_ROOT: ${{ github.workspace }}/.fancy-conformance
+          FANCY_PARITY_PATH: ${{ github.workspace }}/.fancy-expr/python/src:${{ github.workspace }}/.fancy-conformance/python/src
         run: php php/tests/parity.php
+
+      # The comparator itself must be able to fail.
+      - name: Parity control (must report 0%)
+        env:
+          FANCY_CONFORMANCE_ROOT: ${{ github.workspace }}/.fancy-conformance
+          FANCY_PARITY_PATH: ${{ github.workspace }}/.fancy-expr/python/src:${{ github.workspace }}/.fancy-conformance/python/src
+        run: |
+          php php/tests/parity.php --control > control.log 2>&1 && { cat control.log; echo "::error::the control reported no mismatch"; exit 1; }
+          cat control.log
+          grep -q "3 legs equal   0/" control.log

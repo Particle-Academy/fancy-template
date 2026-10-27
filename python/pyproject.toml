@@ -1,0 +1,106 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fancy-template"
+version = "0.1.0"
+description = "Document templates for the Fancy document writers: a writer document with {{ tokens }} and JSON directives, plus a declaration of the data it needs. inspect() at save time, validate_data() before render, render() to plain writer JSON. No code execution, no includes, bounded everywhere. One spec, three runtimes, held to a shared conformance table."
+readme = "README.md"
+# 3.11, matching every other Fancy Python package (3.10 reaches end of life on
+# 2026-10-31).
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Particle Academy" }]
+keywords = [
+    "template",
+    "document",
+    "pdf",
+    "docx",
+    "pptx",
+    "xlsx",
+    "certificate",
+    "agentic",
+    "cross-language",
+    "particle-academy",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Text Processing :: Markup",
+    "Typing :: Typed",
+]
+
+# ONE runtime dependency, and it is first-party: fancy-expr evaluates `$if`. It
+# takes the sibling range, never a caret on a 0.x. Nothing third-party: this
+# package handles templates and data that arrive from end users and agents.
+dependencies = ["fancy-expr>=0.2.0,<2.0"]
+
+[project.urls]
+Homepage = "https://github.com/Particle-Academy/fancy-template"
+Issues = "https://github.com/Particle-Academy/fancy-template/issues"
+Source = "https://github.com/Particle-Academy/fancy-template"
+
+[dependency-groups]
+# `fancy-conformance` is deliberately NOT a requirement: it is never published to
+# PyPI. pytest's `pythonpath` below finds it beside this repository in the .agi
+# envelope; CI puts its checkout of the pinned tag on PYTHONPATH.
+test = ["pytest>=8.0"]
+lint = ["ruff>=0.16"]
+typecheck = ["mypy>=1.11"]
+dev = [{ include-group = "test" }, { include-group = "lint" }, { include-group = "typecheck" }]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fancy_template"]
+
+# The profiles are DATA shared by all three legs, kept once at the repository
+# root. The wheel carries a copy inside the package; _profile.py reads it there
+# and falls back to the checkout's own directory. Build with `--sdist --wheel`
+# explicitly (never the wheel FROM the sdist), as fancy-expr's publish does.
+[tool.hatch.build.targets.wheel.force-include]
+"../profiles" = "fancy_template/profiles"
+
+[tool.hatch.build.targets.sdist]
+include = ["/src", "/tests", "/README.md", "/pyproject.toml", "/LICENSE"]
+
+[tool.hatch.build.targets.sdist.force-include]
+"../SPEC.md" = "SPEC.md"
+"../profiles" = "profiles"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# `pythonpath` so the suite runs on a bare checkout with nothing but pytest.
+# `../../fancy-conformance/python/src` is the shared fixture loader and
+# `../../fancy-expr/python/src` the first-party expression engine, both from the
+# checkouts beside this repository in the .agi envelope (paths relative to this
+# python/ directory). CI has no such siblings and sets PYTHONPATH to its own
+# checkouts of the pinned tags instead.
+pythonpath = ["src", "tests", "../../fancy-conformance/python/src", "../../fancy-expr/python/src"]
+addopts = "--import-mode=importlib -ra"
+filterwarnings = ["error"]
+
+[tool.ruff]
+line-length = 120
+src = ["src", "tests"]
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "N", "C4", "PT"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PT011", "PT018"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["fancy_template"]
+mypy_path = "src"
+strict = true
+# A template's document and its data are JSON: `Any` is the honest type.
+disallow_any_expr = false
+disallow_any_explicit = false

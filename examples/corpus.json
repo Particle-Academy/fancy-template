@@ -1,0 +1,61 @@
+{
+  "description": "The realistic-template corpus for the cross-leg parity harness (php/tests/parity.php) and the writer read-back (scripts/parity/writers.py). Each case renders one template with one data set; `preview: true` renders with the declared examples. The hostile sets carry the data a template must never let through: formula injection, markup, token-looking text, page fields, non-ASCII.",
+  "cases": [
+    { "id": "certificate/preview", "template": "certificate.fine-print.json", "preview": true },
+    { "id": "certificate/hostile", "template": "certificate.fine-print.json", "data": {
+      "recipientName": "Zoë Łukasz O'Brien-Núñez {{ title }} *not bold* <b>x</b>",
+      "programName": "=HYPERLINK(\"http://example.com\",\"click\") & Co.",
+      "issuedAt": "2024-02-29T23:59:59.5+14:00",
+      "verificationCode": "{page} of {pages}",
+      "certificateNumber": "№ 0042 \\ 100%"
+    } },
+    { "id": "invoice/preview", "template": "invoice.last-word.json", "preview": true },
+    { "id": "invoice/hostile", "template": "invoice.last-word.json", "data": {
+      "invoiceNumber": "INV-0042",
+      "issuedAt": "2026-10-27",
+      "dueAt": "2027-01-01",
+      "customer": { "name": "=cmd|' /C calc'!A0", "email": "a&b@example.com" },
+      "lines": [
+        { "description": "Consulting <script>alert(1)</script>", "quantity": 3, "unitPrice": 125050, "amount": 375150 },
+        { "description": "Travel {{ total }} \\n not a newline", "quantity": 1, "unitPrice": 9999, "amount": 9999 },
+        { "description": "Licences -- 10% off", "quantity": 12, "unitPrice": 1, "amount": 12 },
+        { "description": "Rounding: 0.5 cent", "quantity": 1, "unitPrice": -1, "amount": -1 },
+        { "description": "Støtte på norsk, 日本語のサポート", "quantity": 1000000, "unitPrice": 123456789, "amount": 123456789000000 }
+      ],
+      "subtotal": 123456789385160,
+      "tax": 0,
+      "total": 123456789385160,
+      "note": "Pay to IBAN DE00 0000 0000 0000 0000 00 -- *thank you*"
+    } },
+    { "id": "deck/preview", "template": "deck.dark-slide.json", "preview": true },
+    { "id": "deck/hostile", "template": "deck.dark-slide.json", "data": {
+      "quarter": "Q4 [2026]",
+      "presentedAt": "2026-12-31T08:05:00Z",
+      "presenter": "José *Ramírez* _the 2nd_",
+      "regions": [
+        { "name": "EMEA <b>", "revenue": 210000000, "growth": 2.675, "headline": "*bold* _x_ # [a](javascript:x) `c` \\ 1. <b>&", "onTarget": true },
+        { "name": "APAC & Co", "revenue": -5, "growth": -0.04, "headline": "=HYPERLINK(\"http://example.com\")", "onTarget": false },
+        { "name": "LATAM", "revenue": 0, "growth": 1e21, "headline": "{{ quarter }}", "onTarget": false }
+      ]
+    } },
+    { "id": "report/preview", "template": "report.holy-sheet.json", "preview": true },
+    { "id": "report/hostile", "template": "report.holy-sheet.json", "data": {
+      "title": "=1+1",
+      "generatedAt": "2026-02-28",
+      "regions": [
+        { "name": "North", "comment": "=HYPERLINK(\"http://example.com\",\"click\")", "quarters": [
+          { "label": "=A1", "revenue": 0.1, "target": 0.3, "onTarget": false },
+          { "label": "+1", "revenue": 1e-7, "target": 123456789.123, "onTarget": false },
+          { "label": "-1", "revenue": 2.5, "target": 2.5, "onTarget": true },
+          { "label": "@SUM(A1)", "revenue": 100, "target": 99.99, "onTarget": true }
+        ] },
+        { "name": "South", "quarters": [
+          { "label": "Q1", "revenue": 3, "target": 3.0, "onTarget": true },
+          { "label": "Q2", "revenue": -0.5, "target": 0, "onTarget": false },
+          { "label": "Q3", "revenue": 1.5, "target": 1, "onTarget": true },
+          { "label": "Q4", "revenue": 12, "target": 10, "onTarget": true }
+        ] }
+      ]
+    } }
+  ]
+}
