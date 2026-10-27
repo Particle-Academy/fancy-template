@@ -252,6 +252,7 @@ On an object that is an ELEMENT OF AN ARRAY anywhere in `document`:
 | `$each` | a path (section 5 grammar, no filters) to an array |
 | `$as` | a name for the element; default `item`; only with `$each` |
 | `$if` | a fancy-expr expression, kept or dropped by fancy-expr truthiness |
+| `$value` | any JSON value; makes the element a **splice** (below); only with `$each` |
 
 Directive keys are removed from the output. `$each` repeats the object once per
 element, spliced into the parent array in order, with bindings `<$as>`, `$index`
@@ -262,17 +263,55 @@ defaults) and the loop bindings -- including the element's own `$each` binding,
 an author should have to get right); an absent path is `null` (fancy-expr's
 rule), so a condition on an optional variable is not an error.
 
-**A directive can only repeat an OBJECT.** An array element that is itself an
-array (a holy-sheet row) or a string (a list of strings) cannot carry `$each`, so
-it cannot be repeated. See "Known gaps" in `AGENTS.md`.
+### The `$value` splice
+
+A directive sits on an object, so an element that is itself an array (a
+holy-sheet row), a string (a list of strings) or any other value cannot carry
+one. The **splice** repeats any value:
+
+```json
+{ "$each": "lines", "$as": "line", "$value": ["{{ line.desc }}", "{{ line.qty }}"] }
+```
+
+An object element of an array that has a `$value` key is a splice. It is
+replaced, in place, by one rendered copy of its `$value` per element of `$each`,
+in order; an empty array produces nothing. Everything else is `$each`'s rules:
+`$as`, the bindings, `$if` evaluated once per element (in any key order), an
+absent array at render is `TEMPLATE_MISSING` at `$each`, and the same bounds
+(below).
+
+- **`$value` is the element.** Its content renders exactly as if it had been
+  written at the splice's position in the array: the profile matches it by the
+  ELEMENT's path (`sheets.*.rows.*` for a row, so its strings are `cell`s and a
+  string result is still `{ "value": s }`), and `$value` is not a path segment.
+  Error paths point into the template: `/document/sheets/0/rows/1/$value/0`.
+- **Any JSON value**: an array, an object, a string, a number, a boolean or
+  `null`. `null`, `0` and `false` are values to copy, not "no value".
+- **It may contain directives, under the same nesting bound.** Arrays inside
+  `$value` take directive elements and splices like any other array, and each
+  counts toward `limits.directiveDepth` on its path, the splice itself
+  included. The TOP of `$value` is not an array element, so a `$`-key on it is
+  `DIRECTIVE_MISPLACED` -- a condition belongs on the splice.
+- **A splice holds only directives.** `$value` without `$each` is
+  `DIRECTIVE_INVALID` at `$value` (as `$as` without `$each` is), and its content
+  is not inspected. A key not starting with `$` beside `$value` is
+  `DIRECTIVE_SPLICE_KEY` at that key, and its value is not inspected: there is
+  no object left to put it on.
+- **Bounds**: each element counts one toward `limits.iterations`, shared with
+  every `$each`; each rendered copy's values count toward `limits.outputNodes`
+  and `outputBytes`; the splice object itself is not output and counts nothing.
+
+`inspect` order for a splice: its `$` keys in written order, then its other
+keys in written order, then the content of `$value` (when `$each` is present).
 
 Static issues (`inspect`):
 
 | code | when |
 |---|---|
-| `DIRECTIVE_MISPLACED` | a `$`-key on an object that is not an array element, or on `document` itself |
+| `DIRECTIVE_MISPLACED` | a `$`-key on an object that is not an array element, or on `document` itself, or on the top of a `$value` |
 | `DIRECTIVE_UNKNOWN` | any other `$`-key |
-| `DIRECTIVE_INVALID` | `$as` without `$each`; a non-string value; a bad path; an `$as` that is not a name or shadows a variable or an enclosing `$as` |
+| `DIRECTIVE_INVALID` | `$as` or `$value` without `$each`; a non-string value; a bad path; an `$as` that is not a name or shadows a variable or an enclosing `$as` |
+| `DIRECTIVE_SPLICE_KEY` | a key not starting with `$` on a splice (an object with `$value`) |
 | `DIRECTIVE_EXPR` | `$if` that fancy-expr refuses (any fancy-expr code) |
 | `DIRECTIVE_UNDECLARED` | `$each` head or a `$if` reference that is not in scope |
 | `DIRECTIVE_NOT_ARRAY` | `$each` path whose declaration is not `array` |
@@ -322,6 +361,12 @@ CommonMark consumer, including fancy-slides; the fix belongs in dark-slide
 consumed before marker detection). Until then a dark-slide template that must
 show user text verbatim in a `.pptx` uses an element without `format`.
 
+**dark-slide speaker notes are `text`, not `markdown`** (owner ruling,
+2026-10-27). The PPTX writer writes notes as plain text in all three of its
+languages, and fancy-slides edits them in a plain textarea, so a markdown
+escape would print its backslashes in both. A value reaches the notes exactly
+as given (template/profiles 0104).
+
 Profiles: `fine-print`, `last-word`, `dark-slide` and `holy-sheet`, implemented
 in all three legs (phase 6).
 
@@ -335,7 +380,7 @@ Host-overridable through `options.limits`; each failure has a stable code.
 | `tokens` | 10000 | tokens in the template | `TEMPLATE_TOO_MANY_TOKENS` |
 | `tokenLength` | 512 | UTF-8 bytes between `{{` and `}}`; also the length of a `$if` or `$each` value | `TOKEN_TOO_LONG` |
 | `directiveDepth` | 8 | directive objects nested inside directive objects | `DIRECTIVE_TOO_DEEP` |
-| `iterations` | 10000 | `$each` elements expanded in one render, all loops together | `RENDER_TOO_MANY_ITERATIONS` |
+| `iterations` | 10000 | `$each` elements expanded in one render, all loops and splices together | `RENDER_TOO_MANY_ITERATIONS` |
 | `outputNodes` | 50000 | values in the output (each object, array and scalar is one) | `RENDER_TOO_MANY_NODES` |
 | `outputBytes` | 8388608 | UTF-8 bytes of every string value in the output | `RENDER_TOO_LARGE` |
 | `depth` | 64 | nesting of the template and of the data | `TEMPLATE_TOO_DEEP` / `DATA_TOO_DEEP` |
@@ -360,7 +405,8 @@ PHP `Template::validateData`, TypeScript `validateData`, Python `validate_data`)
   data. Issues in document order: envelope keys, then variables (in written
   order, a declaration's own keys before its nested declarations), then
   `document` depth-first. Within an object its `$` keys come first, in written
-  order, then its other entries in written order. Within a string, tokens in
+  order, then its other entries in written order (a splice then walks its
+  `$value`, section 8). Within a string, tokens in
   order; within a token, its path before its filters.
 - `validateData(template, data, options?) -> errors` (section 4).
 - `render(template, data, options?) -> document`, or throws `TemplateError { code, path, variable? }`.

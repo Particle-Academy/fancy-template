@@ -15,6 +15,16 @@ always allowed; nothing that rendered before renders differently.
 
 ### Added
 
+- **The `$value` splice** (owner ruling 2026-10-27, "Agent: add $value
+  splice"), SPEC.md section 8: `{"$each": "<path>", "$as": "<name>", "$value":
+  <any JSON>}` as an item of any array is replaced in place by one rendered copy
+  of `$value` per element, so a holy-sheet ROW, a cell or a string in a list can
+  repeat. `$value` renders as if written at the element's position (a spliced
+  row's strings are still `{ "value": s }`), may contain directives under the
+  same `directiveDepth`, and counts toward `iterations` and `outputNodes` like
+  `$each`. `$value` without `$each` is `DIRECTIVE_INVALID`; a non-`$` key beside
+  it is the new `DIRECTIVE_SPLICE_KEY`. Rows: fancy-conformance 0.36.0.
+
 - **TypeScript leg**, `@particle-academy/fancy-template` (`src/`, `tests/`;
   ESM + CJS + types via tsup). Same API as PHP: `inspect`, `validateData`,
   `render`, `preview`, `tokenize`, `TemplateError { code, path, variable }`.
@@ -52,6 +62,16 @@ always allowed; nothing that rendered before renders differently.
   provenance) and PyPI (build and publish split so `id-token: write` never runs
   build code), both behind the read-only `guard` job and the changelog gate,
   which now BLOCKS them. Both names need the owner's one-time bootstrap.
+
+### Changed
+
+- **dark-slide speaker notes are plain text** (owner ruling 2026-10-27,
+  "Agent: notes are plain"), SPEC.md section 9: the profile's `slides.*.notes`
+  is `text`, not `markdown`, so a value is no longer backslash-escaped there.
+  The PPTX writer writes notes as plain text and fancy-slides edits them in a
+  plain textarea, so the escape printed its backslashes in both. Unreleased
+  until now in every leg, so no consumer has the old behaviour. Row:
+  fancy-conformance 0.36.0 `template/profiles` 0104.
 
 ### Fixed
 
