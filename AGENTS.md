@@ -51,10 +51,15 @@ php php/tests/parity.php --control  # must report 0%
 python -I scripts/sabotage.py       # every bound and guard, one at a time
 ```
 
-Local development uses path repositories for `fancy-expr`, `fancy-conformance`
-and `fine-print` (`composer.json`), because the limits release of fancy-expr and
-the `template/*` suites are not tagged yet. Replace them with registry
-constraints at bootstrap.
+Every dependency resolves from Packagist; there are no path repositories.
+`fancy-expr` takes the sibling range `>=0.2.0 <2.0`. `fancy-conformance` and
+`fine-print` are EXACT `require-dev` pins, because `composer.lock` is not
+committed and a range would resolve whatever Packagist serves on the day CI
+runs. Moving the fixture set is a deliberate commit here. The conformance test
+prints the installed fixture version.
+
+`scripts/sabotage.py` also breaks bounds in the envelope's `repos/fancy-expr`
+checkout, so it runs from inside the envelope only.
 
 ## Traps
 
