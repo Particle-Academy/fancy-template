@@ -1,6 +1,6 @@
 {
   "name": "@particle-academy/fancy-template",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Document templates for the Fancy document writers: a writer document with {{ tokens }} and JSON directives, plus a declaration of the data it needs. inspect() at save time, validateData() before render, render() to plain writer JSON. No code execution, no includes, bounded everywhere. One spec, three runtimes, held to a shared conformance table.",
   "license": "MIT",
   "type": "module",

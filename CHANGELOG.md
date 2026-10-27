@@ -8,6 +8,8 @@ version number is not a compatibility promise until 1.0.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-27
+
 Phase 6 of the plan: the TypeScript and Python legs, and the dark-slide and
 holy-sheet profiles in all three. **Nothing to do for a PHP consumer** -- every
 change to the PHP leg below either adds a profile or accepts a template the spec
