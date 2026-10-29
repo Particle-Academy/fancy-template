@@ -8,6 +8,8 @@ version number is not a compatibility promise until 1.0.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-29
+
 ### Added
 
 - **Office files as templates** (fancy-template#1; owner's rule "any file can

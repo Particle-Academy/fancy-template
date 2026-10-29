@@ -49,7 +49,7 @@ __all__ = [
     "validate_data",
 ]
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 
 def inspect(template: Any, options: dict[str, Any] | None = None) -> dict[str, Any]:

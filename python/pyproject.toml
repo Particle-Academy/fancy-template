@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "fancy-template"
-version = "0.2.0"
+version = "0.3.0"
 description = "Document templates for the Fancy document writers: a writer document with {{ tokens }} and JSON directives, plus a declaration of the data it needs. inspect() at save time, validate_data() before render, render() to plain writer JSON. No code execution, no includes, bounded everywhere. One spec, three runtimes, held to a shared conformance table."
 readme = "README.md"
 # 3.11, matching every other Fancy Python package (3.10 reaches end of life on
