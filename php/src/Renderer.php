@@ -223,6 +223,41 @@ final class Renderer
      */
     private function resolve(array $steps, array $frames): mixed
     {
+        return self::lookup($steps, $frames, $this->data);
+    }
+
+    /**
+     * One token of an office file as text (SPEC.md section 12.6): resolved
+     * against the data (no loop frames: a file has no directives), filtered,
+     * stringified as a `text` field would be. Absent is TEMPLATE_MISSING,
+     * never an empty string. Throws TemplateError with an empty path; the
+     * caller adds the location.
+     *
+     * @param  array<string, mixed>  $token  a scanner token part
+     * @param  array<string, mixed>  $data  validated, defaulted data
+     *
+     * @throws TemplateError
+     */
+    public static function tokenText(array $token, array $data): string
+    {
+        $value = isset($token['path']) ? self::lookup($token['path'], [], $data) : $token['literal'];
+        foreach ($token['filters'] as $filter) {
+            $value = Filters::apply($filter, $value);
+        }
+        if ($value === Absent::Value) {
+            throw new TemplateError('TEMPLATE_MISSING', '');
+        }
+
+        return Filters::scalarText($value);
+    }
+
+    /**
+     * @param  list<string>  $steps
+     * @param  list<array<string, mixed>>  $frames
+     * @param  array<string, mixed>  $data
+     */
+    private static function lookup(array $steps, array $frames, array $data): mixed
+    {
         $head = $steps[0];
         if (in_array($head, Scanner::LOOP_HEADS, true)) {
             return $frames === [] ? Absent::Value : $frames[count($frames) - 1][$head];
@@ -236,10 +271,10 @@ final class Renderer
             }
         }
         if ($value === Absent::Value) {
-            if (! array_key_exists($head, $this->data)) {
+            if (! array_key_exists($head, $data)) {
                 return Absent::Value;
             }
-            $value = $this->data[$head];
+            $value = $data[$head];
         }
 
         foreach (array_slice($steps, 1) as $step) {

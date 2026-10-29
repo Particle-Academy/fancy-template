@@ -28,7 +28,18 @@ src/  tests/               TypeScript leg (package.json AT THE ROOT): vitest -- 
 python/                    Python leg, its own pyproject (`fancy-template`): pytest -- conformance, spec, security
 scripts/parity/            the per-leg drivers and the writer read-back for php/tests/parity.php
 scripts/sabotage.py        breaks each bound and guard in turn, in every leg; every one must turn a suite red
+php/src/Office/            office files as templates (SPEC.md section 12), PHP only: Zip (verified index, raw-record
+                           rebuild), Xml (offset lexer), Package (classify, text model, run-split fill); FileLimits
+fixtures/files/            the office fixtures + cases.json (rows for the ports); rebuilt by
+                           scripts/files/build-fixtures.php from inside the envelope (last-word, dark-slide checkouts)
 ```
+
+Office files: the PHP tests read output with their OWN instruments (ZipArchive,
+a central-directory cutter, DOMDocument), never the library's lexer. Keep it
+that way: a check that reads the filler's output with the filler's parser
+agrees with it whatever it does. ext-zip's CRC warning is swallowed inside
+`Zip::withZip` on purpose (a host that turns warnings into exceptions would
+otherwise get an `ErrorException`, not `FILE_ARCHIVE`; sabotage S56).
 
 The same module split in each leg: Scanner (tokens), Inspector (static issues),
 Declarations (types, validateData, defaults), Renderer (directives, encodings,

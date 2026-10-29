@@ -60,6 +60,29 @@ final class Scanner
         return $parts;
     }
 
+    /**
+     * The tokens of a string WITH their byte offsets: `[start, end, token]`,
+     * where `start` is the offset of `{{` and `end` is just past `}}`. The same
+     * single bounded pass as tokenize, failing with the same codes in the same
+     * order; office files need to know where each token sits in the joined text
+     * of a paragraph (SPEC.md section 12.5).
+     *
+     * @return list<array{0: int, 1: int, 2: array<string, mixed>}>
+     */
+    public static function locate(string $text, int $tokenLength): array
+    {
+        $found = [];
+        $n = strlen($text);
+        $i = 0;
+        while ($i < $n && ($open = strpos($text, '{{', $i)) !== false) {
+            $close = self::findClose($text, $open + 2, $n, $tokenLength);
+            $found[] = [$open, $close + 2, self::parseToken(substr($text, $open + 2, $close - $open - 2))];
+            $i = $close + 2;
+        }
+
+        return $found;
+    }
+
     /** How many tokens a string opens, stopping quietly at the first error (that is reported elsewhere). */
     public static function count(string $text, int $tokenLength): int
     {

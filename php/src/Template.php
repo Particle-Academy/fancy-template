@@ -110,6 +110,78 @@ final class Template
     }
 
     /**
+     * The `{{ placeholders }}` in an office file (.docx/.dotx, .pptx/.potx/.ppsx,
+     * .xlsx/.xltx) and where they are, with the same issue codes as inspect
+     * (SPEC.md section 12). A refused file (FILE_ codes) is reported as the
+     * single issue, as an oversized template is.
+     *
+     * Options: `variables` (declarations, section 3; without them the names
+     * are inferred from the tokens), `limits` (tokens, tokenLength, outputBytes, depth),
+     * `fileLimits` (section 12.8).
+     *
+     * @param  array<string, mixed>  $options
+     * @return array{ok: bool, format: ?string, kind: ?string, issues: list<array<string, string>>, placeholders: list<array<string, string>>, variables: list<string>}
+     */
+    public static function inspectFile(string $bytes, array $options = []): array
+    {
+        $limits = Limits::from($options);
+        $fileLimits = FileLimits::from($options);
+        try {
+            [$file, $issues, $scan] = self::scanFile($bytes, $options, $limits, $fileLimits);
+        } catch (TemplateError $e) {
+            return ['ok' => false, 'format' => null, 'kind' => null, 'issues' => [$e->toArray()], 'placeholders' => [], 'variables' => []];
+        }
+
+        return ['ok' => $issues === [], 'format' => $file->format, 'kind' => $file->kind, 'issues' => $issues,
+            'placeholders' => $scan['placeholders'], 'variables' => $scan['variables']];
+    }
+
+    /**
+     * Fill an office file's placeholders IN PLACE and return the new file's
+     * bytes (SPEC.md section 12). Every part without a token is copied as its
+     * original zip record. Order: the file is opened and checked, then
+     * inspected (first issue thrown), then the data is validated as
+     * validateData does (first error thrown), then filled.
+     *
+     * @param  array<string, mixed>  $options  as inspectFile
+     *
+     * @throws TemplateError
+     */
+    public static function renderFile(string $bytes, mixed $data, array $options = []): string
+    {
+        $limits = Limits::from($options);
+        [$file, $issues, $scan] = self::scanFile($bytes, $options, $limits, FileLimits::from($options));
+        if ($issues !== []) {
+            throw new TemplateError($issues[0]['code'], $issues[0]['path'], $issues[0]['variable'] ?? null);
+        }
+        [$declared] = Office\Package::declarations($options);
+        [$data, $errors] = self::prepare(['variables' => $declared ?? []], $data, $limits);
+        if ($errors !== []) {
+            throw new TemplateError($errors[0]['code'], $errors[0]['path']);
+        }
+
+        return $file->fill($data);
+    }
+
+    /**
+     * @param  array<string, mixed>  $options
+     * @return array{0: Office\Package, 1: list<array<string, string>>, 2: array<string, mixed>}
+     *
+     * @throws TemplateError FILE_ codes
+     */
+    private static function scanFile(string $bytes, array $options, Limits $limits, FileLimits $fileLimits): array
+    {
+        $file = Office\Package::open($bytes, $fileLimits, $limits);
+        [$declared, $issues] = Office\Package::declarations($options);
+        $scan = $file->scan($declared);
+        if ($file->tokenCount() > $limits->tokens) {
+            return [$file, [['code' => 'TEMPLATE_TOO_MANY_TOKENS', 'path' => '']], $scan];
+        }
+
+        return [$file, [...$issues, ...$scan['issues']], $scan];
+    }
+
+    /**
      * Reduce data to plain JSON, bound its depth, apply defaults, validate.
      *
      * @return array{0: array<string, mixed>, 1: list<array{path: string, code: string}>}

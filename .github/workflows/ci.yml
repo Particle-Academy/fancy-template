@@ -110,6 +110,9 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           coverage: none
+          # Office-file templates (SPEC.md section 12) read zips through ext-zip;
+          # named rather than assumed from the runner's default set.
+          extensions: zip
         env:
           update: true # latest patch, not the runner's preinstalled one
       - name: Floor PHP at the PHP2Shell-patched release (CVE-2026-109618/109619)
@@ -244,6 +247,7 @@ jobs:
         with:
           php-version: "8.4"
           coverage: none
+          extensions: zip
         env:
           update: true
       - name: Floor PHP at the PHP2Shell-patched release (CVE-2026-109618/109619)

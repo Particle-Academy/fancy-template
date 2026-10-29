@@ -8,6 +8,46 @@ version number is not a compatibility promise until 1.0.
 
 ## [Unreleased]
 
+### Added
+
+- **Office files as templates** (fancy-template#1; owner's rule "any file can
+  be a template"), SPEC.md section 12. PHP: `Template::inspectFile($bytes,
+  $options)` returns the `{{ placeholders }}` in a `.docx`/`.dotx`,
+  `.pptx`/`.potx`/`.ppsx` or `.xlsx`/`.xltx` with their locations
+  (`/word/document.xml#p1`, `/xl/worksheets/sheet1.xml#B4`) and the same issue
+  codes as `inspect`; `Template::renderFile($bytes, $data, $options)` fills them
+  IN PLACE and returns the new file. Every member without a token is copied as
+  its original zip record, byte for byte. A token Word split across runs is
+  found and filled: the value goes into the run holding `{{` (keeping its
+  formatting), the rest of the token is cut from the following runs, and no run
+  is removed. Values are XML-escaped; an xlsx value stays text (never a
+  formula, and a whole-token number stays a string). Declarations come as a
+  sidecar (`options.variables`, section 3's format), not document properties;
+  without them names are inferred. Read and filled: docx body, tables, text
+  boxes, headers, footers, footnotes, endnotes, comments; pptx slides, layouts,
+  masters, notes; xlsx shared and inline strings. A token in any other part is
+  `TOKEN_FORBIDDEN_FIELD`.
+- Hardening, matching last-word 0.13.0's template intake, refused with typed
+  codes: `FILE_DOCTYPE` (any part read), `FILE_TOO_LARGE` / `FILE_TOO_MANY_ENTRIES`
+  / `FILE_ZIP_BOMB` (`options.fileLimits`), `FILE_PATH` (traversal, absolute,
+  backslash, control characters, two spellings of one part), `FILE_ENCRYPTED`,
+  `FILE_MACRO_ENABLED` (refused, not passed through; a `.docx` carrying a VBA
+  project too), `FILE_ARCHIVE`, `FILE_XML`, `FILE_UNSUPPORTED`; `VALUE_XML_CHAR`
+  for a value XML cannot carry. External relationships are never followed.
+- TypeScript `inspectFile` / `renderFile` and Python `inspect_file` /
+  `render_file` exist and throw `FileTemplatesNotImplementedError`
+  (`code` `FILE_NOT_IMPLEMENTED`): loud, never a silent no-op.
+- `fixtures/files/`: 19 files (hand-authored OOXML, a last-word docx, a
+  dark-slide pptx, hostile files) and `cases.json`, 30 hand-written rows in
+  fancy-conformance's case-table shape for the ports. Sabotages `S42`-`S58`.
+- **Requirement:** `ext-zip` is now declared in `composer.json` (holy-sheet and
+  last-word already require it). Nothing to do unless your PHP lacks it.
+
+### Changed
+
+- Sabotage `S19` now names the first of two identical guard lines in
+  `Template.php` (`render`); `S57` breaks the second (`renderFile`).
+
 ## [0.2.0] - 2026-10-27
 
 Phase 6 of the plan: the TypeScript and Python legs, and the dark-slide and

@@ -22,6 +22,7 @@
     ],
     "require": {
         "php": "^8.4",
+        "ext-zip": "*",
         "particle-academy/fancy-expr": ">=0.2.0 <2.0"
     },
     "require-dev": {

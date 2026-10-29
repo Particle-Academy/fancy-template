@@ -414,5 +414,340 @@ PHP `Template::validateData`, TypeScript `validateData`, Python `validate_data`)
 - `preview(template, options?) -> document` -- `render` with each variable's
   `example` (else `default`).
 - `tokenize(text, options?) -> parts` (section 5).
+- `inspectFile(bytes, options?)` and `renderFile(bytes, data, options?)` (section 12).
 
 Output key order is the template's, minus directive keys.
+
+## 12. Office files as templates
+
+Owner's rule: **any file can be a template.** A customer's own `.docx`, `.pptx`
+or `.xlsx` with `{{ tokens }}` typed into it is filled AS IT IS, in its own
+text, with every other byte of the package kept. Nothing is read into a writer
+model and written back, because a model drops what it does not carry (custom
+styles, embedded objects, fields, comments, layout).
+
+**Status.** PHP implements this section. TypeScript and Python expose the two
+functions and throw `FileTemplatesNotImplementedError` (`code`
+`FILE_NOT_IMPLEMENTED`, `operation` the function's name), never a silent
+no-op. Shared rows and fixtures: `fixtures/files/` (section 12.10).
+
+### 12.1 API
+
+| | PHP | TypeScript | Python |
+|---|---|---|---|
+| inspect | `Template::inspectFile(string $bytes, array $options = [])` | `inspectFile(bytes: Uint8Array, options?)` | `inspect_file(data: bytes, options=None)` |
+| render | `Template::renderFile(string $bytes, mixed $data, array $options = []) : string` | `renderFile(bytes, data, options?) : Uint8Array` | `render_file(data, values, options=None) -> bytes` |
+
+`inspectFile` returns
+`{ ok, format, kind, issues: [{code, path, variable?}], placeholders: [{path, token, variable?}], variables: [name] }`:
+
+- `format`: `docx`, `pptx` or `xlsx`; `kind`: `document` or `template` (from the
+  main part's content type, 12.3). Both `null` when the file is refused.
+- `placeholders`: every token, in order (12.5): `path` is its location, `token`
+  the token's source text from `{{` to `}}` as it reads in the joined text,
+  `variable` the dotted path (absent for a string-literal token).
+- `variables`: the HEAD of every token path, distinct, in first-use order: the
+  names the data must supply.
+- A refused file (any `FILE_` code) is reported as the single issue, as an
+  oversized template is (section 10), and `inspectFile` does not throw for it.
+
+`renderFile` returns the filled file's bytes, or throws `TemplateError`. Order:
+open and classify the package (`FILE_` codes), inspect (first issue), validate
+the data as `validateData` does (first error, path into the data), fill.
+
+Options: `variables` (12.2), `limits` (`tokens`, `tokenLength`, `outputBytes`,
+and `depth` for the data, apply; the rest have nothing to bound in a file) and
+`fileLimits` (12.8). An
+unknown `fileLimits` key, or a value that is not a positive integer, is refused
+as an unknown `limits` key is.
+
+### 12.2 Declarations: a sidecar, not document properties
+
+`options.variables` is a declaration map exactly as an envelope's `variables`
+(section 3), checked by the same rules with the same codes and paths
+(`DECL_INVALID` at `/variables/<name>/...`; a non-object is `TEMPLATE_SHAPE` at
+`/variables`). With it, the file is inspected as a template is: a token whose
+path is not declared is `TOKEN_UNDECLARED`, a token naming an `image` variable
+is `TOKEN_IMAGE_FIELD` (an image cannot be text), data is validated with
+`DATA_*` codes and defaults apply.
+
+**Why a sidecar.** Custom document properties would put the declarations inside
+the customer's file, where:
+
+- anyone who opens it in Word sees and can edit them (File > Properties), so the
+  customer can break the template without knowing it is one;
+- writing or updating them rewrites `docProps/custom.xml`, which is exactly the
+  kind of change to a customer's file this feature exists to avoid;
+- they are flat strings, so a declaration would be JSON inside a property, a
+  second format to parse in three languages;
+- some editors drop unknown custom properties on save.
+
+The host already stores a record for every file it accepts as a template; the
+declarations belong in that record, beside the file, where they can be versioned
+and reused across new uploads of the same file.
+
+**Without declarations** the names are INFERRED from the tokens, the way
+`inspect` reports them: no token is undeclared, nothing is typed, and
+`validateData` has no member to check (data must still be a plain JSON object:
+`DATA_TYPE`, `DATA_TOO_DEEP`). Every token must still resolve at render: absent
+is `TEMPLATE_MISSING`, a container is `TEMPLATE_NOT_SCALAR`, a wrong filter input
+is `FILTER_INPUT`. A file has no `$each`, so `$index`, `$first` and `$last` are
+`TOKEN_UNDECLARED` in both modes.
+
+### 12.3 Recognising the package
+
+In this order; the first failure is the answer.
+
+1. An OLE compound file (first 8 bytes `D0 CF 11 E0 A1 B1 1A E1`) is
+   `FILE_ENCRYPTED` when its bytes contain the UTF-16LE stream name
+   `EncryptedPackage` (a password-protected OOXML file), else `FILE_UNSUPPORTED`
+   (a legacy binary `.doc`/`.xls`/`.ppt`).
+2. The zip is indexed and checked (12.8).
+3. `[Content_Types].xml` must be a member (exact name), else `FILE_UNSUPPORTED`.
+   It is read like every part (12.7). Each member's content type is its
+   `Override` (by part name `/` + member name, ASCII case-insensitive), else the
+   `Default` for its extension (case-insensitive), else none. Content types
+   compare case-insensitively.
+4. A member whose type is a macro-enabled or binary main type is
+   `FILE_MACRO_ENABLED`: `application/vnd.ms-word.document.macroEnabled.main+xml`,
+   `...ms-word.template.macroEnabledTemplate.main+xml`,
+   `...ms-powerpoint.{presentation,slideshow,template,addin}.macroEnabled.main+xml`,
+   `...ms-excel.{sheet,template,addin}.macroEnabled.main+xml`,
+   `...ms-excel.sheet.binary.macroEnabled.main`.
+5. Exactly one member must have one of these main types, else `FILE_UNSUPPORTED`:
+
+   | content type (`application/vnd.openxmlformats-officedocument.` +) | format | kind |
+   |---|---|---|
+   | `wordprocessingml.document.main+xml` | docx | document |
+   | `wordprocessingml.template.main+xml` | docx | template |
+   | `presentationml.presentation.main+xml`, `presentationml.slideshow.main+xml` | pptx | document |
+   | `presentationml.template.main+xml` | pptx | template |
+   | `spreadsheetml.sheet.main+xml` | xlsx | document |
+   | `spreadsheetml.template.main+xml` | xlsx | template |
+
+6. A VBA project anywhere is `FILE_MACRO_ENABLED`: any declared type (`Default`
+   or `Override`) equal to `application/vnd.ms-office.vbaProject`, or any member
+   whose name ends with `vbaProject.bin` (case-insensitive). A `.docx` may not
+   smuggle what a `.docm` declares.
+
+**Macro-enabled files are refused, not passed through.** Passing one through
+would hand back, from this system and filled by an agent, a file carrying code
+nothing here inspected; macro documents are the most common malware carrier,
+and last-word's template intake already refuses them. A customer who needs the
+macros keeps them in their own copy. **Encrypted files are refused** because
+there is nothing to fill: the text is ciphertext without the password, and
+"passing it through" would return the input unchanged with every placeholder
+still in it.
+
+**The parts that are filled**, by content type (prefix as above):
+
+| format | parts |
+|---|---|
+| docx | the main document (`document.main` or `template.main`), `header`, `footer`, `footnotes`, `endnotes`, `comments` (`wordprocessingml.*+xml`) |
+| pptx | `slide`, `slideLayout`, `slideMaster`, `notesSlide`, `notesMaster` (`presentationml.*+xml`) |
+| xlsx | `sharedStrings`, `worksheet` (`spreadsheetml.*+xml`) |
+
+**Layouts and masters are filled.** A token on a master or layout (a footer's
+`{{ client }}`, a confidentiality line) is drawn on every slide that uses it,
+so leaving it unfilled would print `{{ client }}` on every slide; that is the
+common reason to put text there at all. A placeholder's prompt text on a layout
+("Click to add title") is never shown in a slide show, so filling a token in it
+is harmless. **Comments are filled** because they ride along with the file and
+an unfilled token in one leaks the template into the customer's review pane.
+
+**Every other `.xml` or `.rels` member is still read** (12.7, so a DOCTYPE in
+it is refused) and searched for `{{`: one found is `TOKEN_FORBIDDEN_FIELD` at
+`/<member name>`. A token in a place that is not filled is refused, not left
+in the output, exactly as a profile refuses a field it does not list (section
+9): document properties, charts, SmartArt, a glossary, custom XML.
+
+### 12.4 Where text is: containers, runs, text nodes, barriers
+
+Elements are matched by namespace URI and local name, never by prefix. Each
+format accepts its transitional and strict namespace:
+
+| format | namespace (transitional; strict) |
+|---|---|
+| docx | `http://schemas.openxmlformats.org/wordprocessingml/2006/main`; `http://purl.oclc.org/ooxml/wordprocessingml/main` |
+| pptx | `http://schemas.openxmlformats.org/drawingml/2006/main`; `http://purl.oclc.org/ooxml/drawingml/main` |
+| xlsx | `http://schemas.openxmlformats.org/spreadsheetml/2006/main`; `http://purl.oclc.org/ooxml/spreadsheetml/main` |
+
+| format | container | run | text node | transparent run children | barriers |
+|---|---|---|---|---|---|
+| docx | `p` | `r` | `t` child of a run | `rPr`, `delText`, `lastRenderedPageBreak` | every other run child (`tab`, `br`, `cr`, `drawing`, `pict`, `fldChar`, `instrText`, `sym`, `footnoteReference`, ...); `m:oMath`/`m:oMathPara` (OMML namespace) inside the container |
+| pptx | `p` | `r` | `t` child of a run | `rPr` | every other run child; `br` and `fld` inside the container (outside a run) |
+| xlsx | `si`, `is` | `r` | `t` child of a run, or `t` child of the container itself | `rPr` | every other run child |
+
+- A **container** is a paragraph (docx/pptx), a shared-string item `si` or an
+  inline string `is` (xlsx). A container inside another (a text box's paragraph
+  inside a run's drawing) is its own container; the run child holding it
+  (`drawing`) is a barrier in the outer one.
+- A **run** is a run element that is a descendant of the innermost open
+  container and not inside another run. Containers' other children (`proofErr`,
+  `bookmarkStart`, `ins`, `hyperlink`, `fldSimple`, `sdt`, `commentRangeStart`,
+  `rPh`, ...) are neither text nor barriers; runs inside them are runs.
+  `delText` is not text: deleted text is not shown and is not joined.
+- The text nodes of a container, in document order, split at barriers, form its
+  **spans**. A span's **joined text** is its nodes' decoded text (12.7)
+  concatenated. An empty text node (`<w:t/>`, `<w:t></w:t>`) is skipped.
+- A container's **location** is `/<member name>#<label>`, the label being the
+  container's local name and its 0-based index among the part's containers in
+  START-tag order (`#p0`, `#si3`), except an xlsx `is` inside a `c` whose `r`
+  attribute is a cell reference (`[A-Z0-9]+`): then the label is that reference
+  (`#B4`). A text box's paragraph is numbered after the paragraph holding it.
+- The **visible text** of a container, used by the shared rows, is its text
+  nodes' decoded text concatenated (barriers add nothing); in xlsx, a
+  `_xHHHH_` escape is then decoded to its character.
+
+### 12.5 Tokens, inspection, and the run-split rule
+
+Each span whose joined text contains `{{` is scanned with section 5's grammar
+and bounds. A scan failure (`TOKEN_UNCLOSED`, `TOKEN_TOO_LONG`, `TOKEN_EMPTY`,
+`TOKEN_SYNTAX`) is one issue at the container's location, and that span
+contributes no tokens. A token cannot cross a barrier or a container boundary,
+so a `{{` before a tab and its `}}` after it is `TOKEN_UNCLOSED`.
+
+Per token, in order: its path (`TOKEN_UNDECLARED` with `variable`, or
+`TOKEN_IMAGE_FIELD`, 12.2), then each filter (`FILTER_UNKNOWN`, `FILTER_ARG`),
+all at the container's location.
+
+Issue order: sidecar declarations (12.2), then members in CENTRAL-DIRECTORY
+order; within a filled part, containers in location order, spans in order,
+tokens in order. Placeholders are in the same order. When the file's tokens
+outnumber `limits.tokens`, the issues are exactly `[TEMPLATE_TOO_MANY_TOKENS at ""]`.
+
+**The run-split rule.** Word splits text into runs for spell-check marks,
+revision ids and formatting, so `{{ client }}` may be `{{ cli` in one run and
+`ent }}` in the next. A token is found in the span's joined text, then:
+
+1. The value is written into the text node where the token STARTS, at the
+   token's position, replacing the token's characters in that node. That node's
+   run keeps its properties, so **the value takes the formatting of the run
+   holding `{{`**: `{{ cli` bold + `ent }}` italic fills bold.
+2. The rest of the token is cut from each following node it covers. Text in
+   those nodes outside the token stays, in its own run with its own formatting.
+3. **No node and no run is ever removed**, even one left empty: an empty run is
+   invisible, and a run may be what a bookmark, a comment range or a revision
+   is anchored to.
+4. Text around a token in a touched node is copied as its ORIGINAL bytes (its
+   entities, character references, comments and CDATA as written); only the
+   token's own bytes change. A node no token touches is not changed at all.
+
+### 12.6 Values
+
+A token's value is computed as a `text` field's (sections 6 and 7): resolved
+against the (defaulted) data, filtered, stringified. Then:
+
+- It must hold only characters XML 1.0 can carry: a control character other
+  than TAB, LF and CR, or U+FFFE / U+FFFF, is `VALUE_XML_CHAR` at the location,
+  with `variable`. There is no escape for these in XML 1.0.
+- It is **XML-escaped**: `&` `<` `>` as `&amp;` `&lt;` `&gt;`. Nothing in a
+  value can become markup.
+- **xlsx**: a value is written as text in the shared string or inline string
+  that held the token, and the cell around it is never touched, so it stays a
+  text cell: a value starting with `=`, `+`, `-` or `@` is text, never a
+  formula. A `_xHHHH_` sequence in a value has its `_` written as `_x005F_`
+  (ECMA-376 ST_Xstring), so Excel shows the value as given instead of decoding it.
+- **A whole-token number in an xlsx cell stays a string.** The token sits in a
+  shared string, which may be used by several cells, so turning one cell into a
+  number means editing the worksheet's cells and possibly splitting the string;
+  the cell's number format was authored for text; and the value has already been
+  stringified by section 6's rules, which is what the customer typed the token
+  into. A future option may write declared `number` values as number cells;
+  until then the rule is: text in, text out.
+- **docx and xlsx white space**: when a touched text node's new text begins or
+  ends with white space and its start tag has no `xml:space` attribute,
+  ` xml:space="preserve"` is inserted before the tag's `>`, because Word and
+  Excel otherwise drop it. pptx text keeps its white space and needs none.
+- A value is never re-scanned: `{{` in a value reaches the file literally.
+- `limits.outputBytes` bounds the UTF-8 bytes of all values written
+  (`RENDER_TOO_LARGE` at `""`).
+
+### 12.7 Reading XML
+
+Every member that is read (`[Content_Types].xml`, the filled parts and the
+searched `.xml`/`.rels` members) is refused with `FILE_DOCTYPE` at
+`/<member name>` when it contains `<!DOCTYPE` (ASCII case-insensitive),
+before it is parsed. Nothing defines an entity, so nothing expands one, and
+there is no DTD to fetch.
+
+The filled parts and `[Content_Types].xml` are read by a forward-only lexer that
+reports each element with its byte offsets. `FILE_XML` at `/<member name>` for:
+a UTF-16 byte-order mark, an XML declaration naming an encoding other than
+UTF-8, any `<!` other than a comment or CDATA, an unterminated comment, CDATA or
+processing instruction, a mismatched or unclosed tag, more than one root, an
+attribute that is unquoted, repeated or holds `<`, an unbound prefix, an entity
+other than the five predefined ones, a character reference to a character XML
+cannot hold, or an element inside a text node. Text-node content decodes the
+five entities and character references, takes CDATA literally and skips
+comments and processing instructions.
+
+A filled part is re-read by the same lexer before it is written; failing that is
+a bug in the implementation, not a file problem.
+
+### 12.8 The archive
+
+The central directory is parsed and checked before any member is decompressed.
+Bounds, through `options.fileLimits` (the defaults are last-word's):
+
+| limit | default | measured as | code |
+|---|---|---|---|
+| `archiveBytes` | 67108864 | the file | `FILE_TOO_LARGE` |
+| `entries` | 16384 | members in the central directory | `FILE_TOO_MANY_ENTRIES` |
+| `partBytes` | 67108864 | any member's declared uncompressed size | `FILE_TOO_LARGE` |
+| `expandedBytes` | 268435456 | all declared uncompressed sizes together | `FILE_TOO_LARGE` |
+| `compressionRatio` | 1000 | a member's uncompressed / max(1, compressed) | `FILE_ZIP_BOMB` |
+
+All with path `""`. Also refused, path `""`:
+
+| code | when |
+|---|---|
+| `FILE_ARCHIVE` | no end-of-central-directory record that accounts for the whole file; multi-disk; zip64 (an entry count of 65535, a 0xFFFFFFFF size or offset, a zip64 extra field); a method other than stored (0) or deflate (8); a version needed above 2.0; a flag other than bits 1, 2, 3 and 11; a stored member whose sizes differ; a local header that disagrees with the central one (signature, flags, method, name, CRC and sizes unless bit 3 defers them to a matching data descriptor); members that overlap; bytes between the last central record and the end record; a non-ASCII name without the UTF-8 flag; a member whose decompressed length or CRC differs from the directory |
+| `FILE_ENCRYPTED` | the encryption flag (bit 0) or the strong-encryption flag (bit 6), method 99, or an AES extra field (0x9901) |
+| `FILE_PATH` | a name that is empty, starts with `/`, contains `\` or `:` or a control character, is not UTF-8, or has an empty, `.` or `..` segment; two names equal under ASCII case folding (two spellings of one OPC part let a scan read one and an office suite the other) |
+
+**Nothing is fetched.** Relationships are never resolved: an external target
+(`TargetMode="External"`, a remote image, a `file://` link) is bytes in a
+`.rels` member, copied with it.
+
+**Output.** The output has the input's members in the same local and central
+order with the same archive comment. Every member not filled is its ORIGINAL
+LOCAL RECORD, byte for byte (header, extra field, compressed data, data
+descriptor), and its central record is the original with only the local-header
+offset changed. A filled member is written deflated (or stored, if the
+compressor chooses) with its original timestamp, UTF-8 flag and attributes, no
+extra field, no comment and no data descriptor.
+
+### 12.9 Not covered
+
+- **Repeating sections** (a table row per line item). They would need: a
+  marker that delimits the repeated block in the file's own text (for example
+  a row whose first cell holds `{{ #each lines as line }}` and a closing marker),
+  the block located at the XML-element level (a `w:tr`, a run of `w:p`, an
+  `a:tr`, a worksheet `row`) rather than in text, copies of that element with
+  fresh ids where the format demands unique ones (`w14:paraId`, drawing
+  `docPr/@id`, bookmark ids, xlsx row numbers and every cell reference, shared
+  formula ranges, merged cells and defined names below it), the same
+  `iterations` bound, and a rule for what happens to a split marker. That is a
+  structural edit, not a text substitution, which is why it is a separate step.
+- Text that is not in a container's text nodes: attribute values (alt text,
+  hyperlink targets), field codes (`instrText`), chart and SmartArt text, xlsx
+  header/footer strings (`oddHeader`), cell comments, formulas. A token in a
+  member that is not filled is refused (12.3); one in a filled member outside
+  its text nodes is not seen.
+- A newline in a value is written as a newline character, which Word and
+  PowerPoint show as a space; turning it into a break element is not done.
+- ODF (`.odt`, `.odp`, `.ods`), legacy binary formats, `.xlsb`.
+
+### 12.10 Shared rows
+
+`fixtures/files/cases.json` holds the rows (hand-written from this section)
+and `fixtures/files/*` the files, built by `scripts/files/build-fixtures.php`:
+hand-authored minimal OOXML, plus a docx written by last-word and a pptx written
+by dark-slide (then given a layout, a master and a split run). The rows are in
+fancy-conformance's case-table shape, ready to become its `template/files`
+suite; until then every leg reads them from here. A port is done when it passes
+every row: `expect.text` by visible text (12.4), `expect.changed` as the exact
+set of members whose bytes differ (all others byte-identical records),
+`expect.contains` / `expect.absent` as raw substrings, `expect.error` as the
+thrown error and as `inspectFile`'s single issue.

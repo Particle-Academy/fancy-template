@@ -28,6 +28,7 @@ from typing import Any
 
 from ._declarations import apply_defaults, validate_members
 from ._errors import TemplateError
+from ._files import FileTemplatesNotImplementedError, inspect_file, render_file
 from ._inspector import Inspector, declared_variables
 from ._json import first_too_deep, plain
 from ._limits import DEFAULT_LIMITS, Limits, limits_from
@@ -37,10 +38,13 @@ from ._scanner import tokenize as _scan
 
 __all__ = [
     "DEFAULT_LIMITS",
+    "FileTemplatesNotImplementedError",
     "TemplateError",
     "inspect",
+    "inspect_file",
     "preview",
     "render",
+    "render_file",
     "tokenize",
     "validate_data",
 ]

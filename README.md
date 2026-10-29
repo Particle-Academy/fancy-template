@@ -41,6 +41,36 @@ The three legs pass the same 203 `template/*` conformance rows
 (fancy-conformance 0.36.0) and produce byte-identical output on every row and on
 the realistic templates in `examples/` (`php php/tests/parity.php`).
 
+## A customer's own file as the template
+
+Any `.docx` / `.dotx`, `.pptx` / `.potx` / `.ppsx` or `.xlsx` / `.xltx` with
+`{{ tokens }}` typed into it can be filled as it is (PHP; SPEC.md section 12):
+
+```php
+$found = Template::inspectFile($bytes);            // ['ok', 'format', 'kind', 'issues', 'placeholders', 'variables']
+// placeholders: [['path' => '/word/document.xml#p1', 'token' => '{{ client }}', 'variable' => 'client'], ...]
+
+$filled = Template::renderFile($bytes, ['client' => 'Ada & Co'], [
+    'variables' => ['client' => ['type' => 'string', 'required' => true]],   // optional; without it names are inferred
+]);
+```
+
+- Each token is replaced in the file's own text, including one Word has split
+  across runs: the value goes into the run holding `{{` and takes its
+  formatting; the rest of the token is cut from the runs after it; no run is
+  removed.
+- Every member without a token is copied as its original zip record, byte for
+  byte. Values are XML-escaped; an xlsx value is always text, never a formula.
+- Read and filled: docx body, tables, text boxes, headers, footers, footnotes,
+  endnotes, comments; pptx slides, layouts, masters, notes; xlsx shared and
+  inline strings. A token anywhere else is refused, not left behind.
+- Refused with a typed `FILE_` code: a DOCTYPE in any part read, zip bombs,
+  size and entry caps, traversal or duplicate entry names, macro-enabled and
+  encrypted files. Nothing a file points at is ever fetched.
+
+The TypeScript and Python legs throw `FileTemplatesNotImplementedError` for now.
+Repeating sections (a row per line item) are not covered yet.
+
 `examples/` holds the default certificate (fine-print), an invoice (last-word),
 a quarterly deck (dark-slide) and a regional report (holy-sheet).
 

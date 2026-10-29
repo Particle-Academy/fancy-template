@@ -28,6 +28,7 @@ import { tokenize as scan, type Part } from "./scanner";
 
 export { TemplateError, type DataError, type Issue } from "./errors";
 export { DEFAULT_LIMITS, type Limits, type Options } from "./limits";
+export { FileTemplatesNotImplementedError, inspectFile, renderFile, type FileOptions } from "./files";
 export type { Filter, Part, TextPart, TokenPart } from "./scanner";
 export type { Json, JsonObject } from "./json";
 

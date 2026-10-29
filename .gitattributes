@@ -2,3 +2,11 @@
 # GOLDEN_TEXT), so a CRLF checkout on Windows turns the expected text into
 # something the writer never produces and the golden fails there only.
 * text=auto eol=lf
+
+# Office fixtures are zips (or an OLE file): never touch their bytes.
+*.docx binary
+*.dotx binary
+*.docm binary
+*.pptx binary
+*.xlsx binary
+*.zip binary

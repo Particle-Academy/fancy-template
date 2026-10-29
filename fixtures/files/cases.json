@@ -1,0 +1,236 @@
+{
+  "suite": "template/files",
+  "readme": "Rows for inspectFile / renderFile (SPEC.md section 12), shaped like a fancy-conformance case table so they can move there as a `template/files` suite. Every expected value is hand-written from SPEC.md, not captured from an implementation. `input.file` names a file beside this one. renderFile `expect.text` maps a part to the visible text of each of its text containers, in container order (section 12.4: the w:t / a:t / t texts of each paragraph, string item or inline string, joined; an xlsx _xHHHH_ escape decoded); `expect.changed` lists exactly the parts whose bytes differ, and every other member of the output must be its input zip record byte for byte; `expect.contains` / `expect.absent` are raw substrings of an output part. An `error` row expects renderFile to throw (and inspectFile to report the same single issue).",
+  "declarations": {
+    "proposal": {
+      "client": { "type": "string", "required": true, "maxLength": 200 },
+      "amount": { "type": "integer", "required": true },
+      "due": { "type": "date", "required": true },
+      "project": { "type": "string", "required": true },
+      "ref": { "type": "string", "default": "n/a" }
+    }
+  },
+  "cases": [
+    {
+      "id": "0001-docx-inspect",
+      "title": "Every placeholder in a docx and where it is, split runs joined, with declarations",
+      "fn": "inspectFile",
+      "input": { "file": "proposal.docx", "options": { "variables": "@proposal" } },
+      "expect": {
+        "ok": true,
+        "format": "docx",
+        "kind": "document",
+        "issues": [],
+        "placeholders": [
+          { "path": "/word/document.xml#p0", "token": "{{ client }}", "variable": "client" },
+          { "path": "/word/document.xml#p1", "token": "{{ client }}", "variable": "client" },
+          { "path": "/word/document.xml#p2", "token": "{{ amount | money:USD }}", "variable": "amount" },
+          { "path": "/word/document.xml#p2", "token": "{{ due | date:\"d MMMM yyyy\" }}", "variable": "due" },
+          { "path": "/word/document.xml#p3", "token": "{{ ref }}", "variable": "ref" },
+          { "path": "/word/document.xml#p6", "token": "{{ project }}", "variable": "project" },
+          { "path": "/word/document.xml#p8", "token": "{{ project }}", "variable": "project" },
+          { "path": "/word/header1.xml#p0", "token": "{{ client | upper }}", "variable": "client" },
+          { "path": "/word/footer1.xml#p0", "token": "{{ due | date:\"yyyy-MM-dd\" }}", "variable": "due" },
+          { "path": "/word/footnotes.xml#p2", "token": "{{ client }}", "variable": "client" },
+          { "path": "/word/comments.xml#p0", "token": "{{ project }}", "variable": "project" }
+        ],
+        "variables": ["client", "amount", "due", "ref", "project"]
+      }
+    },
+    {
+      "id": "0002-docx-inspect-inferred",
+      "title": "Without declarations the names are inferred from the tokens, and nothing is refused for being undeclared",
+      "fn": "inspectFile",
+      "input": { "file": "proposal.docx" },
+      "expect": { "ok": true, "format": "docx", "kind": "document", "issues": [], "variables": ["client", "amount", "due", "ref", "project"] }
+    },
+    {
+      "id": "0003-docx-inspect-undeclared",
+      "title": "With declarations, a token naming an undeclared variable is TOKEN_UNDECLARED at its location",
+      "fn": "inspectFile",
+      "input": { "file": "proposal.docx", "options": { "variables": {
+        "client": { "type": "string" }, "amount": { "type": "integer" }, "due": { "type": "date" }, "project": { "type": "string" } } } },
+      "expect": { "ok": false, "issues": [ { "code": "TOKEN_UNDECLARED", "path": "/word/document.xml#p3", "variable": "ref" } ] }
+    },
+    {
+      "id": "0004-docx-render",
+      "title": "Fill in place: split runs, three-run token, character references, table, text box, header, footer, footnote, comment; values escaped",
+      "fn": "renderFile",
+      "input": { "file": "proposal.docx", "options": { "variables": "@proposal" },
+        "data": { "client": "Ada & <Lovelace> \"Ltd\"", "amount": 123450, "due": "2026-11-30", "project": "Analytical Engine", "ref": "R-42" } },
+      "expect": {
+        "changed": ["/word/document.xml", "/word/header1.xml", "/word/footer1.xml", "/word/footnotes.xml", "/word/comments.xml"],
+        "text": {
+          "/word/document.xml": [
+            "Proposal for Ada & <Lovelace> \"Ltd\"",
+            "Dear Ada & <Lovelace> \"Ltd\", thank you.",
+            "Total: $1,234.50 due 30 November 2026",
+            "Ref R-42 & more",
+            "Nothing to fill here.",
+            "Project",
+            "Analytical Engine",
+            "Before the box  after the box",
+            "Box: Analytical Engine",
+            "See the note",
+            "Reviewed"
+          ],
+          "/word/header1.xml": ["ADA & <LOVELACE> \"LTD\" - CONFIDENTIAL"],
+          "/word/footer1.xml": ["Prepared 2026-11-30"],
+          "/word/footnotes.xml": ["", "", " Prepared for Ada & <Lovelace> \"Ltd\"."],
+          "/word/comments.xml": ["Check Analytical Engine with legal"]
+        },
+        "contains": {
+          "/word/document.xml": [
+            "<w:r><w:rPr><w:b/></w:rPr><w:t>Ada &amp; &lt;Lovelace&gt; \"Ltd\"</w:t></w:r><w:proofErr w:type=\"spellStart\"/><w:r><w:rPr><w:i/></w:rPr><w:t></w:t></w:r>",
+            "<w:t xml:space=\"preserve\">Total: $1,234.50</w:t></w:r><w:r><w:rPr><w:color w:val=\"C00000\"/></w:rPr><w:t></w:t></w:r><w:r><w:rPr><w:u w:val=\"single\"/></w:rPr><w:t xml:space=\"preserve\"> due 30 November 2026</w:t></w:r>",
+            "<w:t>Ref R-42 &amp; more</w:t>"
+          ]
+        }
+      }
+    },
+    {
+      "id": "0005-docx-render-default",
+      "title": "A declared default fills an absent value",
+      "fn": "renderFile",
+      "input": { "file": "proposal.docx", "options": { "variables": "@proposal" },
+        "data": { "client": "Ada", "amount": 1, "due": "2026-11-30", "project": "P" } },
+      "expect": { "text": { "/word/document.xml": ["Proposal for Ada", "Dear Ada, thank you.", "Total: $0.01 due 30 November 2026", "Ref n/a & more",
+        "Nothing to fill here.", "Project", "P", "Before the box  after the box", "Box: P", "See the note", "Reviewed"] } }
+    },
+    {
+      "id": "0006-docx-render-data-invalid",
+      "title": "Data is validated as validateData does, before anything is filled",
+      "fn": "renderFile",
+      "input": { "file": "proposal.docx", "options": { "variables": "@proposal" }, "data": { "client": "Ada", "amount": 1.5, "due": "2026-11-30", "project": "P" } },
+      "expect": { "error": { "code": "DATA_TYPE", "path": "/amount" } }
+    },
+    {
+      "id": "0007-docx-render-missing-inferred",
+      "title": "Without declarations an absent value is TEMPLATE_MISSING at its location, never an empty string",
+      "fn": "renderFile",
+      "input": { "file": "proposal.docx", "data": { "client": "Ada" } },
+      "expect": { "error": { "code": "TEMPLATE_MISSING", "path": "/word/document.xml#p2", "variable": "amount" } }
+    },
+    {
+      "id": "0008-dotx-render",
+      "title": "A .dotx is filled the same way and stays a template",
+      "fn": "inspectFile",
+      "input": { "file": "proposal.dotx" },
+      "expect": { "ok": true, "format": "docx", "kind": "template", "issues": [] }
+    },
+    {
+      "id": "0009-docx-last-word",
+      "title": "A docx written by last-word: its own split run (bold, then italic) and its footer",
+      "fn": "renderFile",
+      "input": { "file": "letter.last-word.docx", "data": { "client": "Ada", "project": "Engine" } },
+      "expect": {
+        "changed": ["/word/document.xml", "/word/footer1.xml"],
+        "text": { "/word/document.xml": ["Proposal for Ada", "Dear Ada, welcome.", "Project", "Engine"] },
+        "contains": { "/word/document.xml": ["<w:r><w:rPr><w:b/></w:rPr><w:t xml:space=\"preserve\">Dear Ada</w:t></w:r><w:r><w:rPr><w:i/></w:rPr><w:t xml:space=\"preserve\">, welcome.</w:t></w:r>"] }
+      }
+    },
+    {
+      "id": "0010-pptx-render",
+      "title": "A pptx: slide text boxes, a split run, a table, notes, a layout and a master",
+      "fn": "renderFile",
+      "input": { "file": "deck.pptx", "data": { "client": "Ada & Co", "amount": 123450, "project": "Engine" } },
+      "expect": {
+        "changed": ["/ppt/slideMasters/slideMaster1.xml", "/ppt/slideLayouts/slideLayout1.xml", "/ppt/slides/slide1.xml", "/ppt/notesSlides/notesSlide1.xml"],
+        "text": {
+          "/ppt/slideMasters/slideMaster1.xml": ["Ada & Co - confidential"],
+          "/ppt/slideLayouts/slideLayout1.xml": ["Prepared for Ada & Co"],
+          "/ppt/slides/slide1.xml": ["Proposal for Ada & Co", "Total $1,234.50", "Field", "Value", "Project", "Engine", "Client", "Ada & Co"],
+          "/ppt/notesSlides/notesSlide1.xml": ["Mention Ada & Co by name."]
+        },
+        "contains": { "/ppt/slides/slide1.xml": ["<a:t>Total $1,234.50</a:t></a:r><a:r><a:rPr lang=\"en-US\" sz=\"1050\" b=\"1\"/><a:t></a:t></a:r>"] }
+      }
+    },
+    {
+      "id": "0011-xlsx-inspect",
+      "title": "xlsx placeholders: shared strings by item, inline strings by cell",
+      "fn": "inspectFile",
+      "input": { "file": "quote.xlsx" },
+      "expect": {
+        "ok": true, "format": "xlsx", "kind": "document", "issues": [],
+        "placeholders": [
+          { "path": "/xl/sharedStrings.xml#si1", "token": "{{ client }}", "variable": "client" },
+          { "path": "/xl/sharedStrings.xml#si3", "token": "{{ amount }}", "variable": "amount" },
+          { "path": "/xl/sharedStrings.xml#si4", "token": "{{ project }}", "variable": "project" },
+          { "path": "/xl/worksheets/sheet1.xml#B4", "token": "{{ formula }}", "variable": "formula" },
+          { "path": "/xl/worksheets/sheet1.xml#B5", "token": "{{ note }}", "variable": "note" }
+        ],
+        "variables": ["client", "amount", "project", "formula", "note"]
+      }
+    },
+    {
+      "id": "0012-xlsx-render",
+      "title": "xlsx: values stay TEXT (never a formula, a whole-token number stays a string), _x escapes neutralised",
+      "fn": "renderFile",
+      "input": { "file": "quote.xlsx", "data": { "client": "Acme _x0041_ Co", "amount": 1500, "project": "Engine", "formula": "=SUM(B3,1)", "note": "@risk +1 -2" } },
+      "expect": {
+        "changed": ["/xl/worksheets/sheet1.xml", "/xl/sharedStrings.xml"],
+        "text": {
+          "/xl/sharedStrings.xml": ["Client", "Acme _x0041_ Co", "Amount", "1500", "Engine total", "Formula"],
+          "/xl/worksheets/sheet1.xml": ["=SUM(B3,1)", "Note: @risk +1 -2"]
+        },
+        "contains": {
+          "/xl/sharedStrings.xml": ["<si><t>Acme _x005F_x0041_ Co</t></si>", "<si><t>1500</t></si>"],
+          "/xl/worksheets/sheet1.xml": ["<c r=\"B4\" t=\"inlineStr\"><is><t>=SUM(B3,1)</t></is></c>", "<c r=\"A5\"><f>B3*2</f><v>84</v></c>"]
+        },
+        "absent": { "/xl/worksheets/sheet1.xml": ["<f>SUM"] }
+      }
+    },
+    {
+      "id": "0013-external-untouched",
+      "title": "External relationships are copied untouched and never followed",
+      "fn": "renderFile",
+      "input": { "file": "hostile-external.docx", "options": { "variables": "@proposal" },
+        "data": { "client": "Ada", "amount": 1, "due": "2026-11-30", "project": "P" } },
+      "expect": { "changed": ["/word/document.xml", "/word/header1.xml", "/word/footer1.xml", "/word/footnotes.xml", "/word/comments.xml"] }
+    },
+    {
+      "id": "0014-token-across-tab",
+      "title": "A tab breaks the joined text: a token cannot span it",
+      "fn": "inspectFile",
+      "input": { "file": "token-across-tab.docx" },
+      "expect": { "ok": false, "issues": [ { "code": "TOKEN_UNCLOSED", "path": "/word/document.xml#p4" } ] }
+    },
+    {
+      "id": "0015-token-in-properties",
+      "title": "A token in a part that is never filled is refused, not left in the output",
+      "fn": "inspectFile",
+      "input": { "file": "token-in-properties.docx" },
+      "expect": { "ok": false, "issues": [ { "code": "TOKEN_FORBIDDEN_FIELD", "path": "/docProps/core.xml" } ] }
+    },
+    { "id": "0101-doctype", "title": "A DOCTYPE in a scanned part", "fn": "renderFile", "input": { "file": "hostile-doctype.docx", "data": {} },
+      "expect": { "error": { "code": "FILE_DOCTYPE", "path": "/word/document.xml" } } },
+    { "id": "0102-doctype-unscanned", "title": "A DOCTYPE in a part that is only read", "fn": "renderFile", "input": { "file": "hostile-doctype-styles.docx", "data": {} },
+      "expect": { "error": { "code": "FILE_DOCTYPE", "path": "/word/styles.xml" } } },
+    { "id": "0103-traversal", "title": "A `..` segment in an entry name", "fn": "renderFile", "input": { "file": "hostile-traversal.docx", "data": {} },
+      "expect": { "error": { "code": "FILE_PATH", "path": "" } } },
+    { "id": "0104-case-duplicate", "title": "Two entries naming the same part, differing only in case", "fn": "renderFile", "input": { "file": "hostile-case-duplicate.docx", "data": {} },
+      "expect": { "error": { "code": "FILE_PATH", "path": "" } } },
+    { "id": "0105-bomb", "title": "An entry past the compression-ratio bound", "fn": "renderFile", "input": { "file": "hostile-bomb.docx", "data": {} },
+      "expect": { "error": { "code": "FILE_ZIP_BOMB", "path": "" } } },
+    { "id": "0106-zip-encrypted", "title": "An entry with the zip encryption flag", "fn": "renderFile", "input": { "file": "hostile-zip-encrypted.docx", "data": {} },
+      "expect": { "error": { "code": "FILE_ENCRYPTED", "path": "" } } },
+    { "id": "0107-ooxml-encrypted", "title": "A password-protected OOXML file (an OLE compound file holding EncryptedPackage)", "fn": "renderFile", "input": { "file": "encrypted.docx", "data": {} },
+      "expect": { "error": { "code": "FILE_ENCRYPTED", "path": "" } } },
+    { "id": "0108-macro", "title": "A macro-enabled document is refused, not passed through", "fn": "renderFile", "input": { "file": "macro.docm", "data": {} },
+      "expect": { "error": { "code": "FILE_MACRO_ENABLED", "path": "" } } },
+    { "id": "0114-vba-declared", "title": "A .docx main part with a VBA project declared by content type (under another name)", "fn": "renderFile", "input": { "file": "hostile-vba-declared.docx", "data": {} },
+      "expect": { "error": { "code": "FILE_MACRO_ENABLED", "path": "" } } },
+    { "id": "0115-vba-named", "title": "A .docx main part carrying vbaProject.bin with no declaration", "fn": "renderFile", "input": { "file": "hostile-vba-named.docx", "data": {} },
+      "expect": { "error": { "code": "FILE_MACRO_ENABLED", "path": "" } } },
+    { "id": "0109-not-ooxml", "title": "A zip that is not an OOXML package", "fn": "renderFile", "input": { "file": "not-ooxml.zip", "data": {} },
+      "expect": { "error": { "code": "FILE_UNSUPPORTED", "path": "" } } },
+    { "id": "0110-entries", "title": "More entries than fileLimits.entries", "fn": "renderFile", "input": { "file": "proposal.docx", "data": {}, "options": { "fileLimits": { "entries": 10 } } },
+      "expect": { "error": { "code": "FILE_TOO_MANY_ENTRIES", "path": "" } } },
+    { "id": "0111-part-bytes", "title": "An entry larger than fileLimits.partBytes", "fn": "renderFile", "input": { "file": "proposal.docx", "data": {}, "options": { "fileLimits": { "partBytes": 1000 } } },
+      "expect": { "error": { "code": "FILE_TOO_LARGE", "path": "" } } },
+    { "id": "0112-expanded-bytes", "title": "Expanded total larger than fileLimits.expandedBytes", "fn": "renderFile", "input": { "file": "proposal.docx", "data": {}, "options": { "fileLimits": { "expandedBytes": 5000 } } },
+      "expect": { "error": { "code": "FILE_TOO_LARGE", "path": "" } } },
+    { "id": "0113-archive-bytes", "title": "A file larger than fileLimits.archiveBytes", "fn": "renderFile", "input": { "file": "proposal.docx", "data": {}, "options": { "fileLimits": { "archiveBytes": 1000 } } },
+      "expect": { "error": { "code": "FILE_TOO_LARGE", "path": "" } } }
+  ]
+}
