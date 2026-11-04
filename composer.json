@@ -26,8 +26,8 @@
         "particle-academy/fancy-expr": ">=0.2.0 <2.0"
     },
     "require-dev": {
-        "particle-academy/fancy-conformance": "0.36.0",
-        "particle-academy/fine-print": "0.3.0",
+        "particle-academy/fancy-conformance": "0.44.0",
+        "particle-academy/fine-print": "0.6.0",
         "pestphp/pest": "^3.0|^4.0"
     },
     "autoload": {

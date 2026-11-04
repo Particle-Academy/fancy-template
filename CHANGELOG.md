@@ -8,6 +8,8 @@ version number is not a compatibility promise until 1.0.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-03
+
 **What a consumer must do.** Nothing, unless your data can hold a band field
 written literally. **BREAKING:** a value containing `{section}`, `{sectionpages}`,
 `{author}`, `{title}`, `{filename}`, `{date}` or `{time}` (with or without a
