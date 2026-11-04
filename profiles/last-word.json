@@ -1,9 +1,10 @@
 {
   "writer": "last-word",
   "schema": "last-word 0.x (Doc model shared with fine-print)",
-  "notes": "An ALLOWLIST: a string field not matched here refuses tokens. link, chart option, color, font, fonts, page geometry and every style field are deliberately absent. Band slots refuse a value containing {page}/{pages}: last-word writes them as PAGE and NUMPAGES fields with str_replace and has no escape.",
+  "notes": "An ALLOWLIST: a string field not matched here refuses tokens. link, chart option, color, font, fonts, page geometry and every style field are deliberately absent. First match wins, so a band's own patterns come before the generic text ones. Band slots and a blocks band's run text refuse a value holding a field token ({page}, {section}, {date}, ...): last-word writes them as live Word fields and has no escape.",
   "fields": [
     { "path": "title", "encode": "text" },
+    { "path": "page.*.blocks.**.runs.*.text", "encode": "band" },
     { "path": "**.runs.*.text", "encode": "text" },
     { "path": "**.blocks.*.text", "encode": "text" },
     { "path": "**.blocks.*.alt", "encode": "text" },

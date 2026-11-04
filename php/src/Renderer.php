@@ -17,6 +17,13 @@ use FancyExpr\Expr;
  */
 final class Renderer
 {
+    /**
+     * A writer's band field, the grammar last-word's `Schema::FIELD_TOKEN` and
+     * fine-print's share. Run over a VALUE, never over template text; a value
+     * holding one is refused (SPEC.md section 9).
+     */
+    private const BAND_FIELD = '/\{(?:(?:page|pages|section|sectionpages|author|title|filename)|(?:date|time)(?::[^{}"\\\\]+)?)\}/';
+
     private int $iterations = 0;
 
     private int $nodes = 0;
@@ -352,7 +359,7 @@ final class Renderer
                 throw new TemplateError($e->errorCode, $path, $variable);
             }
 
-            if ($field['encode'] === 'band' && (str_contains($piece, '{page}') || str_contains($piece, '{pages}'))) {
+            if ($field['encode'] === 'band' && preg_match(self::BAND_FIELD, $piece) === 1) {
                 throw new TemplateError('VALUE_PAGE_FIELD', $path, $variable);
             }
             $out .= match ($format) {

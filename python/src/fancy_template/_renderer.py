@@ -9,6 +9,7 @@ is refused before it is built rather than after.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable, Iterator
 from typing import Any
 
@@ -22,6 +23,13 @@ from ._json import image_type, is_number, pointer, utf8_length
 from ._limits import Limits
 from ._profile import Profile
 from ._scanner import LOOP_HEADS, is_digits, path_only, tokenize
+
+# A writer's band field, the grammar last-word's Schema::FIELD_TOKEN and
+# fine-print's share. Run over a VALUE, never over template text; a value holding
+# one is refused (SPEC.md section 9).
+BAND_FIELD = re.compile(
+    r'\{(?:(?:page|pages|section|sectionpages|author|title|filename)|(?:date|time)(?::[^{}"\\]+)?)\}'
+)
 
 
 def escape_markdown(s: str) -> str:
@@ -232,7 +240,7 @@ class Renderer:
             except TemplateError as e:
                 raise TemplateError(e.code, path, variable) from None
 
-            if field["encode"] == "band" and ("{page}" in piece or "{pages}" in piece):
+            if field["encode"] == "band" and BAND_FIELD.search(piece):
                 raise TemplateError("VALUE_PAGE_FIELD", path, variable)
             out += escape(piece)
 

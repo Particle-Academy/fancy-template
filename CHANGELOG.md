@@ -8,6 +8,30 @@ version number is not a compatibility promise until 1.0.
 
 ## [Unreleased]
 
+**What a consumer must do.** Nothing, unless your data can hold a band field
+written literally. **BREAKING:** a value containing `{section}`, `{sectionpages}`,
+`{author}`, `{title}`, `{filename}`, `{date}` or `{time}` (with or without a
+`:FORMAT`) in a band slot, or anywhere in a blocks band's run text, is now
+`VALUE_PAGE_FIELD`, as `{page}` and `{pages}` already were. It was a live-field
+injection before: a recipient named `see {date}` printed a date. Reword the value
+or catch the error. Values with other braces are unchanged.
+
+### Added
+
+- `profiles/fine-print.json` allows tokens in the first and even band slots, and in
+  bands on a `pageBreak.page`, following fine-print's mixed-page vocabulary. Page
+  geometry on a break stays closed to tokens.
+
+### Fixed
+
+- **Security: `VALUE_PAGE_FIELD` missed most of the tokens a writer resolves.** It
+  checked `{page}` and `{pages}` alone, in all three legs, while last-word has written
+  `{date}`, `{author}` and others as live Word fields since 0.16.0, and fine-print now
+  resolves `{section}` and more.
+- **Security: a blocks band's run text was not `band`-encoded, for either writer**:
+  first match made it plain `text`, so a user value `{page}` in a logo footer became
+  a live field with no error at all. Both profiles now match it first.
+
 ## [0.3.0] - 2026-10-29
 
 ### Added

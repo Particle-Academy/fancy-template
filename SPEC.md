@@ -331,7 +331,7 @@ index, `**` for zero or more. **Anything not listed refuses tokens**
 | encoding | result |
 |---|---|
 | `text` | the string, every token stringified |
-| `band` | as `text`, but a VALUE containing `{page}` or `{pages}` is `VALUE_PAGE_FIELD` |
+| `band` | as `text`, but a VALUE containing a writer's band field is `VALUE_PAGE_FIELD`: `{page}` `{pages}` `{section}` `{sectionpages}` `{author}` `{title}` `{filename}`, and `{date}` / `{time}`, each with an optional `:FORMAT` of one or more characters that are not a brace, a double quote or a backslash. Other braces are ordinary text |
 | `markup` | as `text`, each value escaped for the element's `format`: `markdown` backslash-escapes every ASCII punctuation character (CommonMark), `html` escapes `& < > " '` as entities, `plain` or absent leaves it |
 | `markdown` | as `markup` with format fixed to markdown |
 | `cell` | a whole token keeps a number, boolean or date as-is; every other result is written `{ "value": s }`, so user data can never become a formula. "Date" means: the token's path is DECLARED `date` and the result (after filters) is a valid `date` string (section 3) -- a date-shaped value of a `string` variable is wrapped, and `{{ d \| date:"yyyy" }}` is text. A valid date cannot begin with `=`. A literal (token-free) cell is the author's and is left as written |
@@ -339,10 +339,13 @@ index, `**` for zero or more. **Anything not listed refuses tokens**
 
 Wrong use of an image field is `TOKEN_IMAGE_FIELD`.
 
-**`{page}` is refused rather than escaped** because neither fine-print nor
-last-word has an escape for it: both replace the literal text in a band. A refusal
-is loud; any lookalike substitution would print a different character. When a
-writer gains an escape, the band encoding uses it.
+**A band field is refused rather than escaped** because neither fine-print nor
+last-word has an escape for it: both turn the literal text into a live value in a
+band, in a one-line slot and in a blocks band's run text alike, so a blocks band's
+run text is `band` too. The list is one for both writers, including the ones a
+writer writes literally today (fine-print's `{date}`), so a value that refuses in
+one refuses in the other. A refusal is loud; any lookalike substitution would print
+a different character. When a writer gains an escape, the band encoding uses it.
 
 **The markdown escape is CommonMark's, and the profile does not force `plain`.**
 dark-slide's PPTX writer (`MarkdownInline`, in all three of its languages) does

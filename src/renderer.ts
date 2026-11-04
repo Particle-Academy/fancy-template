@@ -9,6 +9,13 @@ import type { FieldRule, Profile } from "./profile";
 import { LOOP_HEADS, pathOnly, tokenize } from "./scanner";
 
 /**
+ * A writer's band field, the grammar last-word's `Schema::FIELD_TOKEN` and
+ * fine-print's share. Run over a VALUE, never over template text; a value holding
+ * one is refused (SPEC.md section 9).
+ */
+const BAND_FIELD = /\{(?:(?:page|pages|section|sectionpages|author|title|filename)|(?:date|time)(?::[^{}"\\]+)?)\}/;
+
+/**
  * Template + validated, defaulted data -> writer document (SPEC.md sections 6-10).
  *
  * Runs only on a template that passed inspect and data that passed
@@ -229,7 +236,7 @@ export class Renderer {
         throw e;
       }
 
-      if (field.encode === "band" && (piece.includes("{page}") || piece.includes("{pages}"))) {
+      if (field.encode === "band" && BAND_FIELD.test(piece)) {
         throw new TemplateError("VALUE_PAGE_FIELD", path, variable);
       }
       out += escape(piece);
