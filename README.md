@@ -41,6 +41,13 @@ The three legs pass the same 203 `template/*` conformance rows
 (fancy-conformance 0.36.0) and produce byte-identical output on every row and on
 the realistic templates in `examples/` (`php php/tests/parity.php`).
 
+<!-- fancy-agents-note:start -->
+> **For agents.** This package is listed on the Fancy MCP catalog server at
+> `https://ui.particle.academy/mcp` (streamable HTTP, no API key; MCP id `fancy-ui`),
+> with install commands and docs, alongside the rest of the kit. How an agent
+> installs and uses this package is in [AGENTS.md](https://github.com/Particle-Academy/fancy-template/blob/main/AGENTS.md).
+<!-- fancy-agents-note:end -->
+
 ## A customer's own file as the template
 
 Any `.docx` / `.dotx`, `.pptx` / `.potx` / `.ppsx` or `.xlsx` / `.xltx` with

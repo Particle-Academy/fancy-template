@@ -24,7 +24,8 @@
     "dist",
     "profiles",
     "SPEC.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "AGENTS.md"
   ],
   "engines": {
     "node": ">=22"
