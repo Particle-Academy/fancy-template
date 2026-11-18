@@ -12,8 +12,9 @@ npm install @particle-academy/fancy-template          # Node >=22
 pip install fancy-template                            # Python >=3.11
 ```
 
-**Status:** the PHP leg is on Packagist. The TypeScript and Python legs are
-built but not yet published; the npm and PyPI names need their first publish.
+**Status:** all three legs are published, from one tag: Packagist
+(`particle-academy/fancy-template`), npm (`@particle-academy/fancy-template`)
+and PyPI (`fancy-template`).
 
 ## Find it on the Fancy MCP server
 
