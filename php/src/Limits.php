@@ -14,6 +14,7 @@ final class Limits
 {
     public const DEFAULTS = [
         'templateBytes' => 262144,
+        'editorBytes' => 262144,
         'tokens' => 10000,
         'tokenLength' => 512,
         'directiveDepth' => 8,
@@ -25,6 +26,7 @@ final class Limits
 
     private function __construct(
         public readonly int $templateBytes,
+        public readonly int $editorBytes,
         public readonly int $tokens,
         public readonly int $tokenLength,
         public readonly int $directiveDepth,

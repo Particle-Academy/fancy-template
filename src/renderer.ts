@@ -100,26 +100,39 @@ export class Renderer {
     if (!Array.isArray(value)) return this.object(value, path, segments, frames);
 
     const out: Json[] = [];
-    value.forEach((item, i) => {
-      const at = pointer(path, i);
-      const itemSegments = [...segments, String(i)];
-      if (!isObject(item) || !Object.keys(item).some((k) => k.startsWith("$"))) {
-        out.push(this.value(item, at, itemSegments, frames, null));
-        return;
-      }
-      const isSplice = Object.hasOwn(item, "$value");
-      for (const innerFrames of this.expand(item, at, frames)) {
-        if (isSplice) {
-          // The splice object is not output: each copy is $value, rendered at
-          // the element's path (SPEC.md section 8).
-          out.push(this.value(own(item, "$value") as Json, pointer(at, "$value"), itemSegments, innerFrames, null));
-          continue;
-        }
-        this.count(null);
-        out.push(this.object(item, at, itemSegments, innerFrames));
-      }
-    });
+    value.forEach((item, i) => this.element(item, pointer(path, i), [...segments, String(i)], frames, out));
     return out;
+  }
+
+  /**
+   * One element of an array, appended to `out`: itself, or what its directives
+   * expand to. A spread's elements come back through here one by one, at the
+   * spread's own profile segments, so each is an element of the PARENT array
+   * (SPEC.md section 8, `$spread`).
+   */
+  private element(item: Json, at: string, segments: string[], frames: Frame[], out: Json[]): void {
+    if (!isObject(item) || !Object.keys(item).some((k) => k.startsWith("$"))) {
+      out.push(this.value(item, at, segments, frames, null));
+      return;
+    }
+    const isSplice = Object.hasOwn(item, "$value");
+    const isSpread = isSplice && own(item, "$spread") === true;
+    for (const innerFrames of this.expand(item, at, frames)) {
+      if (isSpread) {
+        // Neither the spread object nor its $value array is output.
+        const base = pointer(at, "$value");
+        (own(item, "$value") as Json[]).forEach((member, j) => this.element(member, pointer(base, j), segments, innerFrames, out));
+        continue;
+      }
+      if (isSplice) {
+        // The splice object is not output: each copy is $value, rendered at
+        // the element's path (SPEC.md section 8).
+        out.push(this.value(own(item, "$value") as Json, pointer(at, "$value"), segments, innerFrames, null));
+        continue;
+      }
+      this.count(null);
+      out.push(this.object(item, at, segments, innerFrames));
+    }
   }
 
   /**

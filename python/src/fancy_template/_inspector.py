@@ -97,8 +97,16 @@ class Inspector:
         if too_deep is not None:
             self._issue("TEMPLATE_TOO_DEEP", too_deep)
             return
-        if string_bytes(template) > self.limits.template_bytes:
+        # `editor` is a builder's source, bounded on its own (SPEC.md section
+        # 10): its entry counts toward editorBytes and never templateBytes.
+        has_editor = "editor" in template
+        editor_bytes = string_bytes(template["editor"]) if has_editor else 0
+        envelope_bytes = string_bytes(template) - (len("editor") + editor_bytes if has_editor else 0)
+        if envelope_bytes > self.limits.template_bytes:
             self._issue("TEMPLATE_TOO_LARGE", "")
+            return
+        if editor_bytes > self.limits.editor_bytes:
+            self._issue("TEMPLATE_EDITOR_TOO_LARGE", "/editor")
             return
         if self._count_tokens(template.get("document")) > self.limits.tokens:
             self._issue("TEMPLATE_TOO_MANY_TOKENS", "")
@@ -117,7 +125,8 @@ class Inspector:
             elif key == "description":
                 if not isinstance(value, str):
                     self._issue("TEMPLATE_SHAPE", at)
-            elif key in ("variables", "document"):
+            elif key in ("variables", "document", "editor"):
+                # `editor` is opaque: an object, and nothing in it is read (SPEC.md section 2).
                 if not isinstance(value, dict):
                     self._issue("TEMPLATE_SHAPE", at)
             else:
@@ -208,8 +217,21 @@ class Inspector:
         for key in obj:
             if not key.startswith("$"):
                 self._issue("DIRECTIVE_SPLICE_KEY", pointer(path, key))
-        if "$each" in obj:
-            self._walk(obj["$value"], pointer(path, "$value"), segments, frames, directive_depth, False)
+        if "$each" not in obj:
+            return
+        content = obj["$value"]
+        if "$spread" not in obj:
+            self._walk(content, pointer(path, "$value"), segments, frames, directive_depth, False)
+            return
+        at = pointer(path, "$value")
+        # A spread (SPEC.md section 8): each element of $value is an element
+        # of the PARENT array, matched at the spread's own segments. A
+        # reported $spread or $value is not walked: one error, not a cascade.
+        # `is True`, never `==`: in Python 1 == True.
+        if obj["$spread"] is not True or not isinstance(content, list):
+            return
+        for j, member in enumerate(content):
+            self._walk(member, pointer(at, j), segments, frames, directive_depth, True)
 
     def _each_binding(self, obj: dict[str, Any], frames: list[DeclFrame]) -> list[DeclFrame] | None:
         """The frames an element's ``$each`` introduces, or None.
@@ -274,6 +296,16 @@ class Inspector:
                 # Any JSON is a valid $value; only a splice with nothing to
                 # repeat over is wrong (SPEC.md section 8).
                 if not has_each:
+                    self._issue("DIRECTIVE_INVALID", at)
+                elif obj.get("$spread") is True and not isinstance(value, list):
+                    self._issue("DIRECTIVE_SPREAD_NOT_ARRAY", at)
+                continue
+
+            if key == "$spread":
+                # Exactly `true`, on a splice: an absent $spread is the one
+                # spelling of a plain splice (SPEC.md section 8). `is True`:
+                # in Python 1 == True.
+                if value is not True or "$value" not in obj:
                     self._issue("DIRECTIVE_INVALID", at)
                 continue
 

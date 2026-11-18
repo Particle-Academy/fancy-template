@@ -132,3 +132,23 @@ it('section 4: validateData in declaration order, depth-first', function (): voi
         ['path' => '/d', 'code' => 'DATA_TYPE'],
     ]);
 });
+
+it('section 2: editor is carried, never read and never changed', function (): void {
+    $source = ['kind' => 'fancy-template-ui', 'version' => 1, 'tree' => ['blocks' => [['id' => 'b1', '$each' => 'nope', 'text' => '{{ nope }}']]], 'page' => ['size' => 'A4']];
+    $t = specFp([['type' => 'paragraph', 'runs' => [['text' => '{{ xs.0.n }}']]]]) + ['editor' => $source];
+    $before = json_encode($t, JSON_THROW_ON_ERROR);
+
+    expect(Template::inspect($t)['issues'])->toBe([]);
+    expect(Template::validateData($t, ['xs' => [['n' => 'a']]]))->toBe([]);
+    expect(Template::render($t, ['xs' => [['n' => 'a']]]))->toBe(['blocks' => [['type' => 'paragraph', 'runs' => [['text' => 'a']]]]]);
+    expect(json_encode($t, JSON_THROW_ON_ERROR))->toBe($before);
+    expect($t['editor'])->toBe($source);
+});
+
+it('section 10: the default editorBytes is 262144', function (): void {
+    $at = specFp([]) + ['editor' => ['t' => str_repeat('x', 262143)]];
+    $over = specFp([]) + ['editor' => ['t' => str_repeat('x', 262144)]];
+
+    expect(Template::inspect($at)['issues'])->toBe([]);
+    expect(Template::inspect($over)['issues'])->toBe([['code' => 'TEMPLATE_EDITOR_TOO_LARGE', 'path' => '/editor']]);
+});

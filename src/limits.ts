@@ -4,6 +4,7 @@
  */
 export const DEFAULT_LIMITS = Object.freeze({
   templateBytes: 262144,
+  editorBytes: 262144,
   tokens: 10000,
   tokenLength: 512,
   directiveDepth: 8,

@@ -102,21 +102,37 @@ class Renderer:
 
         result: list[Any] = []
         for i, item in enumerate(value):
-            at = pointer(path, i)
-            item_segments = [*segments, str(i)]
-            if not isinstance(item, dict) or not any(k.startswith("$") for k in item):
-                result.append(self._value(item, at, item_segments, frames, None))
-                continue
-            is_splice = "$value" in item
-            for inner in self._expand(item, at, frames):
-                if is_splice:
-                    # The splice object is not output: each copy is $value,
-                    # rendered at the element's path (SPEC.md section 8).
-                    result.append(self._value(item["$value"], pointer(at, "$value"), item_segments, inner, None))
-                    continue
-                self._count(None)
-                result.append(self._object(item, at, item_segments, inner))
+            self._element(item, pointer(path, i), [*segments, str(i)], frames, result)
         return result
+
+    def _element(
+        self, item: Any, at: str, segments: list[str], frames: list[dict[str, Any]], result: list[Any]
+    ) -> None:
+        """One element of an array, appended to ``result``.
+
+        Itself, or what its directives expand to. A spread's elements come back
+        through here one by one, at the spread's own profile segments, so each
+        is an element of the PARENT array (SPEC.md section 8, ``$spread``).
+        """
+        if not isinstance(item, dict) or not any(k.startswith("$") for k in item):
+            result.append(self._value(item, at, segments, frames, None))
+            return
+        is_splice = "$value" in item
+        is_spread = is_splice and item.get("$spread") is True
+        for inner in self._expand(item, at, frames):
+            if is_spread:
+                # Neither the spread object nor its $value array is output.
+                base = pointer(at, "$value")
+                for j, member in enumerate(item["$value"]):
+                    self._element(member, pointer(base, j), segments, inner, result)
+                continue
+            if is_splice:
+                # The splice object is not output: each copy is $value,
+                # rendered at the element's path (SPEC.md section 8).
+                result.append(self._value(item["$value"], pointer(at, "$value"), segments, inner, None))
+                continue
+            self._count(None)
+            result.append(self._object(item, at, segments, inner))
 
     def _expand(self, item: dict[str, Any], path: str, frames: list[dict[str, Any]]) -> Iterator[list[dict[str, Any]]]:
         """The frames each copy of a directive element renders with.

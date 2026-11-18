@@ -17,7 +17,7 @@ use FancyExpr\ExprSyntaxError;
  */
 final class Inspector
 {
-    private const ENVELOPE_KEYS = ['fancyTemplate', 'writer', 'description', 'variables', 'document'];
+    private const ENVELOPE_KEYS = ['fancyTemplate', 'writer', 'description', 'variables', 'document', 'editor'];
 
     /** @var list<array{code: string, path: string, variable?: string}> */
     private array $issues = [];
@@ -60,8 +60,18 @@ final class Inspector
 
             return;
         }
-        if (Json::stringBytes($template) > $this->limits->templateBytes) {
+        // `editor` is a builder's source, bounded on its own (SPEC.md section
+        // 10): its entry counts toward editorBytes and never templateBytes.
+        $hasEditor = array_key_exists('editor', $template);
+        $editorBytes = $hasEditor ? Json::stringBytes($template['editor']) : 0;
+        $envelopeBytes = Json::stringBytes($template) - ($hasEditor ? strlen('editor') + $editorBytes : 0);
+        if ($envelopeBytes > $this->limits->templateBytes) {
             $this->issue('TEMPLATE_TOO_LARGE', '');
+
+            return;
+        }
+        if ($editorBytes > $this->limits->editorBytes) {
+            $this->issue('TEMPLATE_EDITOR_TOO_LARGE', '/editor');
 
             return;
         }
@@ -79,6 +89,8 @@ final class Inspector
                 'description' => is_string($value) ? null : $this->issue('TEMPLATE_SHAPE', $at),
                 'variables' => Json::isObject($value) ? null : $this->issue('TEMPLATE_SHAPE', $at),
                 'document' => Json::isObject($value) ? null : $this->issue('TEMPLATE_SHAPE', $at),
+                // Opaque: an object, and nothing in it is read (SPEC.md section 2).
+                'editor' => Json::isObject($value) ? null : $this->issue('TEMPLATE_SHAPE', $at),
                 default => $this->issue('TEMPLATE_SHAPE', $at),
             };
         }
@@ -200,8 +212,22 @@ final class Inspector
                 $this->issue('DIRECTIVE_SPLICE_KEY', Json::pointer($path, $key));
             }
         }
-        if (array_key_exists('$each', $object)) {
+        if (! array_key_exists('$each', $object)) {
+            return;
+        }
+        if (! array_key_exists('$spread', $object)) {
             $this->walk($object['$value'], Json::pointer($path, '$value'), $segments, $frames, $directiveDepth, false);
+
+            return;
+        }
+        // A spread (SPEC.md section 8): each element of $value is an element
+        // of the PARENT array, matched at the spread's own segments. A
+        // reported $spread or $value is not walked: one error, not a cascade.
+        if ($object['$spread'] !== true || ! Json::isList($object['$value'])) {
+            return;
+        }
+        foreach ($object['$value'] as $j => $member) {
+            $this->walk($member, Json::pointer(Json::pointer($path, '$value'), $j), $segments, $frames, $directiveDepth, true);
         }
     }
 
@@ -302,6 +328,18 @@ final class Inspector
                 // Any JSON is a valid $value; only a splice with nothing to
                 // repeat over is wrong (SPEC.md section 8).
                 if (! $hasEach) {
+                    $this->issue('DIRECTIVE_INVALID', $at);
+                } elseif (($object['$spread'] ?? null) === true && ! Json::isList($value)) {
+                    $this->issue('DIRECTIVE_SPREAD_NOT_ARRAY', $at);
+                }
+
+                continue;
+            }
+
+            if ($key === '$spread') {
+                // Exactly `true`, on a splice: an absent $spread is the one
+                // spelling of a plain splice (SPEC.md section 8).
+                if ($value !== true || ! array_key_exists('$value', $object)) {
                     $this->issue('DIRECTIVE_INVALID', $at);
                 }
 

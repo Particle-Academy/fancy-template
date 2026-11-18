@@ -126,28 +126,50 @@ final class Renderer
 
         $out = [];
         foreach ($value as $i => $item) {
-            $at = Json::pointer($path, $i);
-            $itemSegments = [...$segments, (string) $i];
-            if (! Json::isObject($item) || $item === [] || ! $this->hasDirectives($item)) {
-                $out[] = $this->value($item, $at, $itemSegments, $frames);
-
-                continue;
-            }
-            $isSplice = array_key_exists('$value', $item);
-            foreach ($this->expand($item, $at, $frames) as $innerFrames) {
-                if ($isSplice) {
-                    // The splice object is not output: each copy is $value,
-                    // rendered at the element's path (SPEC.md section 8).
-                    $out[] = $this->value($item['$value'], Json::pointer($at, '$value'), $itemSegments, $innerFrames);
-
-                    continue;
-                }
-                $this->count(null);
-                $out[] = $this->object($item, $at, $itemSegments, $innerFrames);
-            }
+            $this->element($item, Json::pointer($path, $i), [...$segments, (string) $i], $frames, $out);
         }
 
         return $out;
+    }
+
+    /**
+     * One element of an array, appended to $out: itself, or what its directives
+     * expand to. A spread's elements come back through here one by one, at the
+     * spread's own profile segments, so each is an element of the PARENT array
+     * (SPEC.md section 8, `$spread`).
+     *
+     * @param  list<string>  $segments  the element's profile path
+     * @param  list<array<string, mixed>>  $frames
+     * @param  list<mixed>  $out
+     */
+    private function element(mixed $item, string $at, array $segments, array $frames, array &$out): void
+    {
+        if (! Json::isObject($item) || $item === [] || ! $this->hasDirectives($item)) {
+            $out[] = $this->value($item, $at, $segments, $frames);
+
+            return;
+        }
+        $isSplice = array_key_exists('$value', $item);
+        $isSpread = $isSplice && ($item['$spread'] ?? null) === true;
+        foreach ($this->expand($item, $at, $frames) as $innerFrames) {
+            if ($isSpread) {
+                // Neither the spread object nor its $value array is output.
+                foreach ($item['$value'] as $j => $member) {
+                    $this->element($member, Json::pointer(Json::pointer($at, '$value'), $j), $segments, $innerFrames, $out);
+                }
+
+                continue;
+            }
+            if ($isSplice) {
+                // The splice object is not output: each copy is $value,
+                // rendered at the element's path (SPEC.md section 8).
+                $out[] = $this->value($item['$value'], Json::pointer($at, '$value'), $segments, $innerFrames);
+
+                continue;
+            }
+            $this->count(null);
+            $out[] = $this->object($item, $at, $segments, $innerFrames);
+        }
     }
 
     /** @param  array<string, mixed>  $item */

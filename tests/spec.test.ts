@@ -111,3 +111,31 @@ describe("section 4: validateData reads every declared entry", () => {
     ]);
   });
 });
+
+describe("section 2: editor is carried, never read and never changed", () => {
+  const source = { kind: "fancy-template-ui", version: 1, tree: { blocks: [{ id: "b1", $each: "nope", text: "{{ nope }}" }], empty: {}, list: [] }, page: {} };
+  const deepFreeze = (v: unknown): unknown => {
+    if (typeof v === "object" && v !== null) {
+      Object.values(v).forEach(deepFreeze);
+      Object.freeze(v);
+    }
+    return v;
+  };
+
+  it("no function changes the template it is given, so editor round-trips exactly", () => {
+    const t = deepFreeze({ ...fp([{ type: "paragraph", runs: [{ text: "{{ xs.0.n }}" }] }]), editor: source }) as Record<string, unknown>;
+    const before = JSON.stringify(t);
+    expect(inspect(t).issues).toEqual([]);
+    expect(validateData(t, { xs: [{ n: "a" }] })).toEqual([]);
+    expect(render(t, { xs: [{ n: "a" }] })).toEqual({ blocks: [{ type: "paragraph", runs: [{ text: "a" }] }] });
+    expect(JSON.stringify(t)).toBe(before);
+    expect(t.editor).toBe(source);
+  });
+
+  it("the default editorBytes is 262144", () => {
+    const at = { ...fp([]), editor: { t: "x".repeat(262143) } };
+    const over = { ...fp([]), editor: { t: "x".repeat(262144) } };
+    expect(inspect(at).issues).toEqual([]);
+    expect(inspect(over).issues).toEqual([{ code: "TEMPLATE_EDITOR_TOO_LARGE", path: "/editor" }]);
+  });
+});

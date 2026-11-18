@@ -8,6 +8,7 @@ from typing import Any
 
 DEFAULT_LIMITS: dict[str, int] = {
     "templateBytes": 262144,
+    "editorBytes": 262144,
     "tokens": 10000,
     "tokenLength": 512,
     "directiveDepth": 8,
@@ -21,6 +22,7 @@ DEFAULT_LIMITS: dict[str, int] = {
 @dataclass(frozen=True)
 class Limits:
     template_bytes: int
+    editor_bytes: int
     tokens: int
     token_length: int
     directive_depth: int
@@ -44,6 +46,7 @@ def limits_from(options: dict[str, Any] | None) -> Limits:
         values[name] = value
     return Limits(
         template_bytes=values["templateBytes"],
+        editor_bytes=values["editorBytes"],
         tokens=values["tokens"],
         token_length=values["tokenLength"],
         directive_depth=values["directiveDepth"],

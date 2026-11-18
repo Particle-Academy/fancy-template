@@ -37,9 +37,37 @@ wire.
 | `writer` | a profile this implementation knows (section 9) | `TEMPLATE_WRITER` |
 | `variables` | optional object; absent means `{}` | `TEMPLATE_SHAPE` |
 | `document` | required object | `TEMPLATE_SHAPE` |
+| `editor` | optional object, opaque (below) | `TEMPLATE_SHAPE` |
 | anything else except `description` (a string) | not allowed | `TEMPLATE_SHAPE` |
 
 The envelope itself must be an object (`TEMPLATE_SHAPE` at path `""`).
+
+### `editor`: a builder's own source, carried and never read
+
+A visual builder (fancy-template-ui) keeps what it needs to reopen a template
+-- its block tree, a host block's settings, a group's identity -- under
+`editor`, because none of that can be recovered from the compiled `document`.
+
+```json
+{ "fancyTemplate": 1, "writer": "fine-print", "variables": {},
+  "editor": { "kind": "fancy-template-ui", "version": 1, "tree": {}, "page": {} },
+  "document": { "blocks": [] } }
+```
+
+- **Opaque.** Any object, any content. `inspect`, `validateData`, `render` and
+  `preview` never read it: no token in it is scanned, counted or rendered, a
+  `$`-key in it is not a directive, and nothing in it is reported. Its shape
+  belongs to the builder that wrote it. **`document` stays the truth for
+  rendering**; a host never needs the builder to render.
+- **Never in the output.** `render` and `preview` return the document only.
+- **Preserved.** No function changes the template it is given, so a host that
+  stores the template stores `editor` exactly as given. (In PHP an empty object
+  and an empty list decode alike, as everywhere in this file: a builder that
+  needs the difference must not rely on it.)
+- **Bounded on its own.** Its size counts toward `limits.editorBytes`, not
+  `templateBytes`, so a large builder source does not eat the document's budget
+  (section 10). It is inside the envelope, so `depth` applies to it, and so do
+  section 4's plain-JSON refusals.
 
 ## 3. Variable declarations
 
@@ -253,6 +281,7 @@ On an object that is an ELEMENT OF AN ARRAY anywhere in `document`:
 | `$as` | a name for the element; default `item`; only with `$each` |
 | `$if` | a fancy-expr expression, kept or dropped by fancy-expr truthiness |
 | `$value` | any JSON value; makes the element a **splice** (below); only with `$each` |
+| `$spread` | `true`; makes a splice with an array `$value` a **spread** (below): its elements are spliced flat, per item |
 
 Directive keys are removed from the output. `$each` repeats the object once per
 element, spliced into the parent array in order, with bindings `<$as>`, `$index`
@@ -304,14 +333,66 @@ absent array at render is `TEMPLATE_MISSING` at `$each`, and the same bounds
 `inspect` order for a splice: its `$` keys in written order, then its other
 keys in written order, then the content of `$value` (when `$each` is present).
 
+### `$spread`: a group of elements per item, flat
+
+A splice repeats ONE element. A group of siblings (per pricing model: a page
+break, a heading, a table and a subtotal) cannot be written as one, because an
+array `$value` is one element that happens to be an array, so the parent gets
+nested arrays (`[[4 blocks], [4 blocks]]`), which no writer accepts. One `$each`
+per sibling gives the wrong order (every heading, then every table). `$spread`
+splices the group flat:
+
+```json
+{ "$each": "models", "$as": "model", "$spread": true, "$value": [
+  { "$if": "!$first", "type": "pageBreak" },
+  { "type": "heading", "level": 2, "runs": [{ "text": "{{ model.name }}" }] },
+  { "type": "paragraph", "runs": [{ "text": "{{ model.subtotal | money:USD }}" }] }
+] }
+```
+
+`$spread: true` on a splice makes it a **spread**: per element of `$each`, in
+order, each element of `$value` is spliced into the parent array in place, one
+by one, so N items of a group of K produce N x K siblings (fewer where an `$if`
+drops one). Everything else is the splice's rules.
+
+- **Each element of `$value` is an element of the PARENT array.** It renders
+  exactly as if written at the spread's position: the profile matches it by the
+  spread's own path (`blocks.*`, so a heading's runs are text fields), and error
+  paths point into the template (`/document/blocks/2/$value/1/runs/0/text`).
+  It may therefore carry directives of its own (`$if`, `$each`, a splice, a
+  spread), each counting one more toward `limits.directiveDepth` than the
+  spread itself. A spread inside a spread is flattened into the same parent.
+- **Bindings.** The spread's `$as`, `$index`, `$first` and `$last` are in scope
+  for every element and everything inside it. An element with only `$if` is not
+  a loop, so its `$first` is the spread's: `"$if": "!$first"` is "not before
+  the first item" (fancy-expr: `unary := "!" primary`, and `$first` is a
+  `"$" IDENT` segment; `$index > 0` is the same condition). An element's own
+  `$each` binds its own `$index`, innermost first, as everywhere.
+- **`$value` must be an array**, written literally: anything else is
+  `DIRECTIVE_SPREAD_NOT_ARRAY` at `$value`. An empty array is allowed and
+  produces nothing.
+- **`$spread` takes exactly `true`.** `false`, a string or any other value is
+  `DIRECTIVE_INVALID` at `$spread` (an absent `$spread` is the one way to say a
+  plain splice). So is `$spread` on an object without `$value`.
+- When `$value` is reported (`DIRECTIVE_INVALID` or `DIRECTIVE_SPREAD_NOT_ARRAY`),
+  or `$spread` is, the content of `$value` is not inspected.
+- **Bounds**: the spread counts toward `limits.iterations` exactly as a splice,
+  one per element of `$each` (an element's own `$each` counts its own). Neither
+  the spread object nor its `$value` array is output, so neither counts toward
+  `outputNodes`; each spliced element counts what it renders.
+
+`inspect` order for a spread: as a splice (`$` keys, other keys, then `$value`),
+the content of `$value` walked element by element in written order.
+
 Static issues (`inspect`):
 
 | code | when |
 |---|---|
 | `DIRECTIVE_MISPLACED` | a `$`-key on an object that is not an array element, or on `document` itself, or on the top of a `$value` |
 | `DIRECTIVE_UNKNOWN` | any other `$`-key |
-| `DIRECTIVE_INVALID` | `$as` or `$value` without `$each`; a non-string value; a bad path; an `$as` that is not a name or shadows a variable or an enclosing `$as` |
+| `DIRECTIVE_INVALID` | `$as` or `$value` without `$each`; `$spread` without `$value`, or with any value but `true`; a non-string value; a bad path; an `$as` that is not a name or shadows a variable or an enclosing `$as` |
 | `DIRECTIVE_SPLICE_KEY` | a key not starting with `$` on a splice (an object with `$value`) |
+| `DIRECTIVE_SPREAD_NOT_ARRAY` | `$value` on a spread (`$spread: true`) that is not an array |
 | `DIRECTIVE_EXPR` | `$if` that fancy-expr refuses (any fancy-expr code) |
 | `DIRECTIVE_UNDECLARED` | `$each` head or a `$if` reference that is not in scope |
 | `DIRECTIVE_NOT_ARRAY` | `$each` path whose declaration is not `array` |
@@ -379,7 +460,8 @@ Host-overridable through `options.limits`; each failure has a stable code.
 
 | limit | default | measured as | code |
 |---|---|---|---|
-| `templateBytes` | 262144 | UTF-8 bytes of every string in the envelope, keys included | `TEMPLATE_TOO_LARGE` |
+| `templateBytes` | 262144 | UTF-8 bytes of every string in the envelope, keys included, except the `editor` entry (its key and its value) | `TEMPLATE_TOO_LARGE` |
+| `editorBytes` | 262144 | UTF-8 bytes of every string in the value of `editor`, keys included | `TEMPLATE_EDITOR_TOO_LARGE` at `/editor` |
 | `tokens` | 10000 | tokens in the template | `TEMPLATE_TOO_MANY_TOKENS` |
 | `tokenLength` | 512 | UTF-8 bytes between `{{` and `}}`; also the length of a `$if` or `$each` value | `TOKEN_TOO_LONG` |
 | `directiveDepth` | 8 | directive objects nested inside directive objects | `DIRECTIVE_TOO_DEEP` |
@@ -395,8 +477,10 @@ nested object or array one more; a container at a level above the limit fails.
 down, the object itself included. Iterations are counted as they happen, so a
 nested `$each` counts every inner element of every outer one.
 
-`depth`, then `templateBytes`, then `tokens` are checked first and stop
-`inspect`: a template over one of them is reported with that one issue. fancy-expr's own limits
+`depth`, then `templateBytes`, then `editorBytes`, then `tokens` are checked
+first and stop `inspect`: a template over one of them is reported with that one
+issue. `editorBytes` is measured whatever `editor` holds, so a non-object over
+the limit is `TEMPLATE_EDITOR_TOO_LARGE`, not `TEMPLATE_SHAPE`. fancy-expr's own limits
 (8192 bytes, depth 64) apply inside `$if` as well.
 
 ## 11. API

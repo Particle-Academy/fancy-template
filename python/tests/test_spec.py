@@ -159,3 +159,29 @@ def test_validate_data_in_declaration_order_depth_first() -> None:
         {"path": "/a/c", "code": "DATA_REQUIRED"},
         {"path": "/d", "code": "DATA_TYPE"},
     ]
+
+
+def test_section_2_editor_is_carried_never_read_and_never_changed() -> None:
+    import copy
+    import json
+
+    source = {
+        "kind": "fancy-template-ui",
+        "version": 1,
+        "tree": {"blocks": [{"id": "b1", "$each": "nope", "text": "{{ nope }}"}], "empty": {}, "list": []},
+        "page": {},
+    }
+    t = {**fp([{"type": "paragraph", "runs": [{"text": "{{ xs.0.n }}"}]}]), "editor": source}
+    snapshot = copy.deepcopy(t)
+    assert inspect(t)["issues"] == []
+    assert validate_data(t, {"xs": [{"n": "a"}]}) == []
+    assert render(t, {"xs": [{"n": "a"}]}) == {"blocks": [{"type": "paragraph", "runs": [{"text": "a"}]}]}
+    assert json.dumps(t) == json.dumps(snapshot)
+    assert t["editor"] is source
+
+
+def test_section_10_the_default_editor_bytes_is_262144() -> None:
+    at = {**fp([]), "editor": {"t": "x" * 262143}}
+    over = {**fp([]), "editor": {"t": "x" * 262144}}
+    assert inspect(at)["issues"] == []
+    assert inspect(over)["issues"] == [{"code": "TEMPLATE_EDITOR_TOO_LARGE", "path": "/editor"}]

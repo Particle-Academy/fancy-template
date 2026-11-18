@@ -111,8 +111,17 @@ export class Inspector {
       this.issue("TEMPLATE_TOO_DEEP", tooDeep);
       return;
     }
-    if (stringBytes(template) > this.limits.templateBytes) {
+    // `editor` is a builder's source, bounded on its own (SPEC.md section 10):
+    // its entry counts toward editorBytes and never templateBytes.
+    const hasEditor = Object.hasOwn(template, "editor");
+    const editorBytes = hasEditor ? stringBytes(own(template, "editor") as Json) : 0;
+    const envelopeBytes = stringBytes(template) - (hasEditor ? "editor".length + editorBytes : 0);
+    if (envelopeBytes > this.limits.templateBytes) {
       this.issue("TEMPLATE_TOO_LARGE", "");
+      return;
+    }
+    if (editorBytes > this.limits.editorBytes) {
+      this.issue("TEMPLATE_EDITOR_TOO_LARGE", "/editor");
       return;
     }
     if (this.countTokens(own(template, "document")) > this.limits.tokens) {
@@ -136,6 +145,9 @@ export class Inspector {
         case "variables":
         case "document":
           if (!isObject(value)) this.issue("TEMPLATE_SHAPE", at);
+          break;
+        case "editor":
+          if (!isObject(value)) this.issue("TEMPLATE_SHAPE", at); // editor: opaque, an object, never read (SPEC.md section 2)
           break;
         default:
           this.issue("TEMPLATE_SHAPE", at);
@@ -224,9 +236,18 @@ export class Inspector {
     for (const key of Object.keys(object)) {
       if (!key.startsWith("$")) this.issue("DIRECTIVE_SPLICE_KEY", pointer(path, key));
     }
-    if (Object.hasOwn(object, "$each")) {
-      this.walk(own(object, "$value") as Json, pointer(path, "$value"), segments, frames, directiveDepth, false);
+    if (!Object.hasOwn(object, "$each")) return;
+    const content = own(object, "$value") as Json;
+    if (!Object.hasOwn(object, "$spread")) {
+      this.walk(content, pointer(path, "$value"), segments, frames, directiveDepth, false);
+      return;
     }
+    const at = pointer(path, "$value");
+    // A spread (SPEC.md section 8): each element of $value is an element of
+    // the PARENT array, matched at the spread's own segments. A reported
+    // $spread or $value is not walked: one error, not a cascade.
+    if (own(object, "$spread") !== true || !Array.isArray(content)) return;
+    content.forEach((member, j) => this.walk(member, pointer(at, j), segments, frames, directiveDepth, true));
   }
 
   /**
@@ -294,6 +315,14 @@ export class Inspector {
         // Any JSON is a valid $value; only a splice with nothing to repeat
         // over is wrong (SPEC.md section 8).
         if (!hasEach) this.issue("DIRECTIVE_INVALID", at);
+        else if (own(object, "$spread") === true && !Array.isArray(value)) this.issue("DIRECTIVE_SPREAD_NOT_ARRAY", at);
+        continue;
+      }
+
+      if (key === "$spread") {
+        // Exactly `true`, on a splice: an absent $spread is the one spelling
+        // of a plain splice (SPEC.md section 8).
+        if (value !== true || !Object.hasOwn(object, "$value")) this.issue("DIRECTIVE_INVALID", at);
         continue;
       }
 

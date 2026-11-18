@@ -8,8 +8,47 @@ version number is not a compatibility promise until 1.0.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-18
+
+**What a consumer must do.** Nothing. Both additions are new keys that every
+earlier release refused, so no template that rendered before renders
+differently. `options.limits` gains `editorBytes`; a host that passes a full
+limits object needs no change, because absent limits take their defaults.
+
+### Added
+
+- **`$spread`: a group of siblings per item, spliced flat** (document builder,
+  owner-approved q_52d2323e, "repeating sections"), SPEC.md section 8.
+  `{ "$each": "models", "$as": "model", "$spread": true, "$value": [ ... ] }`
+  splices each element of `$value` into the parent array, per item, in order:
+  a page break, a heading, a lines table and a subtotal per pricing model.
+  Without it an array `$value` renders as nested arrays (`[[4 blocks], [4
+  blocks]]`), which fine-print refuses; a per-block `$each` gives the wrong
+  order. Each element is an element of the PARENT array: matched by the
+  spread's own profile path, it may carry `$if`, `$each`, a splice or a spread,
+  and its `$first` is the spread's, so "not before the first item" is
+  `"$if": "!$first"` (fancy-expr's negation is `!`; there is no `not`). Same
+  bindings, iteration and output bounds as a splice; an element's directive
+  counts one more toward `directiveDepth`. Errors: `$spread` other than `true`,
+  or without `$value`, is `DIRECTIVE_INVALID`; a non-array `$value` is the new
+  `DIRECTIVE_SPREAD_NOT_ARRAY`.
+- **The `editor` envelope key** (document builder, owner-approved q_b83ac35f),
+  SPEC.md sections 2 and 10: an optional object holding a visual builder's own
+  source. Never read by `inspect`, `validateData`, `render` or `preview`, never
+  output, never changed. It is bounded by the new `limits.editorBytes` (default
+  262144, `TEMPLATE_EDITOR_TOO_LARGE` at `/editor`) and no longer counts toward
+  `templateBytes`. A non-object is `TEMPLATE_SHAPE`.
+- An end-to-end test (`php/tests/QuoteSpreadFinePrintTest.php`): conformance
+  row `template/directives` 0033, a quote with two pricing models, is rendered
+  and written through fine-print, which validates it, lints it with no error
+  and reads back one page per model.
+- Sabotages S59-S68, T59-T68 and P59-P68 (`$spread` and `editor`).
+
 ### Changed
 
+- **Tests: fancy-conformance pin moved from 0.45.0 to 0.55.0** in all three
+  legs. 0.54.0 adds the `$spread` rows and 0.55.0 the `editor` rows; no
+  existing `template/*` row changed between 0.45.0 and 0.55.0.
 - **CI: the lab-certificate gate verifies against the lab's rotated key list.**
   The lab's first signing key is retired: certificates it already issued still
   verify, and nothing new it signs ever can. Consumers do nothing.
