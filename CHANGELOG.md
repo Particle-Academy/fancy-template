@@ -8,6 +8,10 @@ version number is not a compatibility promise until 1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- CI: re-pin org third-party allowlist to 2614224
+
 ## [0.5.0] - 2026-11-18
 
 **What a consumer must do.** Nothing. Both additions are new keys that every
